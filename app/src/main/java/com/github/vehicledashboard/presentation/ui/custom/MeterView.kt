@@ -18,7 +18,7 @@ import kotlin.math.sin
 
 class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, attributeSet) {
 
-    private var barMaxValue: Int = -1
+    private var barMaxValue: Float = UNSPECIFIED
         set(value) {
             require(value > 0)
             field = value
@@ -29,19 +29,19 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
     private var majorTickStep = UNSPECIFIED
         set(value) {
-            require(value in 1 until barMaxValue)
+            require(value > 0 && value < barMaxValue)
             field = value
             invalidate()
         }
 
     private var minorTickStep = UNSPECIFIED
         set(value) {
-            require(value in 1 until barMaxValue)
+            require(value > 0 && value < barMaxValue)
             field = value
             invalidate()
         }
 
-    private var needleValue: Int = 0
+    private var needleValue: Float = ZERO
         set(value) {
             require(value >= 0)
             field = min(barMaxValue, value)
@@ -89,7 +89,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             arcPaint.color = barColor
             txtPaint.color = barColor
             ticksPaint.color = barColor
-            barMaxValue = attributes.getInt(
+            barMaxValue = attributes.getFloat(
                 R.styleable.MeterView_barMaxValue,
                 UNSPECIFIED
             )
@@ -97,11 +97,11 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 R.styleable.MeterView_barValuePadding,
                 0f
             )
-            majorTickStep = attributes.getInt(
+            majorTickStep = attributes.getFloat(
                 R.styleable.MeterView_barMajorStep,
                 UNSPECIFIED
             )
-            minorTickStep = attributes.getInt(
+            minorTickStep = attributes.getFloat(
                 R.styleable.MeterView_barMinorStep,
                 UNSPECIFIED
             )
@@ -113,6 +113,10 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             needlePaint.color = attributes.getColor(
                 R.styleable.MeterView_needleColor,
                 Color.RED // todo: replace with theme attr
+            )
+            needleValue = attributes.getFloat(
+                R.styleable.MeterView_needleStartValue,
+                ZERO
             )
         } finally {
             attributes.recycle()
@@ -131,7 +135,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         needlePaint.strokeWidth = NEEDLE_STROKE_WIDTH
     }
 
-    fun setSpeed(progress: Int, duration: Long, startDelay: Long): ValueAnimator {
+    fun setNeedleValue(progress: Float, duration: Long, startDelay: Long): ValueAnimator {
         require(progress > 0)
         val va = ValueAnimator.ofObject(
             object : TypeEvaluator<Float> {
@@ -145,7 +149,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         va.duration = duration
         va.startDelay = startDelay
         va.addUpdateListener { animation ->
-            val value = animation.animatedValue as? Int
+            val value = animation.animatedValue as? Float
             if (value != null) {
                 needleValue = value
             }
@@ -154,8 +158,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         return va
     }
 
-    fun setSpeed(progress: Int, animate: Boolean): ValueAnimator {
-        return setSpeed(progress, 1500, 200)
+    fun setNeedleValue(progress: Float, animate: Boolean): ValueAnimator {
+        return setNeedleValue(progress, 1500, 200)
     }
 
     // fixme: refactor
@@ -196,14 +200,11 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // Clear canvas
-        canvas.drawColor(Color.BLUE)
+        canvas.drawColor(Color.TRANSPARENT) // clear canvas
 
         drawBackground(canvas)
         drawArc(canvas)
         drawTicks(canvas)
-
-        // Draw Needle
         drawNeedle(canvas)
     }
 
@@ -216,18 +217,20 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         min(canvas.width, canvas.height) / 2f
 
     private fun drawArc(canvas: Canvas) {
-        canvas.drawArc(getOval(canvas, 1f), START_ANGLE, END_ANGLE, false, arcPaint)
+        canvas.drawArc(getOval(canvas, 1f), ARC_START_ANGLE, ARC_END_ANGLE, false, arcPaint)
     }
 
     private fun drawTicks(canvas: Canvas) {
-        val minorTicks = (majorTickStep / minorTickStep.toFloat()).toInt()
+        val majorStepAngle = calcMajorStepAngle()
+        val minorTicks = (majorTickStep / minorTickStep).toInt()
+        val minorStepAngle = majorStepAngle / minorTicks
         val majorTicksLength = 30f
         val minorTicksLength = majorTicksLength / 2
         val oval = getOval(canvas, 1f)
         val radius = oval.width() * 0.48f
         var currentAngle = BAR_START_ANGLE
-        val endAngle = END_ANGLE + currentAngle
-        var curProgress = 0
+        val endAngle = ARC_END_ANGLE + currentAngle
+        var curProgress = 0f
         while (currentAngle <= endAngle) {
             canvas.drawLine(
                 (oval.centerX() + cos((180 - currentAngle) / 180 * Math.PI) * (radius - majorTicksLength / 2)).toFloat(),
@@ -237,8 +240,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 ticksPaint
             )
             for (i in 1..minorTicks) {
-                val angle = currentAngle + i * minorTickStep
-                if (angle >= endAngle + minorTickStep / 2) {
+                val angle = currentAngle + i * minorStepAngle
+                if (angle >= endAngle + minorStepAngle / 2) {
                     break
                 }
                 canvas.drawLine(
@@ -262,21 +265,25 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 )
                 canvas.restore()
             }
-            currentAngle += majorTickStep
+            currentAngle += majorStepAngle
             curProgress += majorTickStep
         }
     }
+
+    private fun calcMajorStepAngle() = majorTickStep * ARC_END_ANGLE / barMaxValue
+
 
     private fun drawNeedle(canvas: Canvas) {
         val oval = getOval(canvas, 1f)
         val radius = oval.width() * 0.4f
         val smallOval = getOval(canvas, 0.2f)
-        val angle = BAR_START_ANGLE + needleValue
+        val majorStepAngle = calcMajorStepAngle()
+        val angle = BAR_START_ANGLE + needleValue * majorStepAngle
         canvas.drawLine(
-            (oval.centerX() + Math.cos((180 - angle) / 180 * Math.PI) * smallOval.width() * 0.5f).toFloat(),
-            (oval.centerY() - Math.sin(angle / 180 * Math.PI) * smallOval.width() * 0.5f).toFloat(),
-            (oval.centerX() + Math.cos((180 - angle) / 180 * Math.PI) * radius).toFloat(),
-            (oval.centerY() - Math.sin(angle / 180 * Math.PI) * radius).toFloat(),
+            (oval.centerX() + cos((180 - angle) / 180 * Math.PI) * smallOval.width() * 0.5f).toFloat(),
+            (oval.centerY() - sin(angle / 180 * Math.PI) * smallOval.width() * 0.5f).toFloat(),
+            (oval.centerX() + cos((180 - angle) / 180 * Math.PI) * radius).toFloat(),
+            (oval.centerY() - sin(angle / 180 * Math.PI) * radius).toFloat(),
             needlePaint
         )
         val middle = calculateCanvasMiddle(canvas)
@@ -295,22 +302,23 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         )
     }
 
-    private fun getLabelFor(progress: Int): String =
-        if (progress % majorTickStep == 0) {
-            progress.toString()
+    private fun getLabelFor(progress: Float): String =
+        if (progress % majorTickStep == 0f) {
+            "%.0f".format(progress)
         } else {
             ""
         }
 
     companion object {
-        private const val UNSPECIFIED = -1
+        private const val UNSPECIFIED = -1f
+        private const val ZERO = 0f
         private const val DEFAULT_LABEL_TEXT_SIZE_SP = 12
         private const val ARC_STROKE_WIDTH = 5f
         private const val NEEDLE_STROKE_WIDTH = 5f
         private const val TICK_STROKE_WIDTH = 3f
 
         private const val BAR_START_ANGLE = -40f
-        private const val START_ANGLE = 140f
-        private const val END_ANGLE = 260f
+        private const val ARC_START_ANGLE = 140f
+        private const val ARC_END_ANGLE = 260f
     }
 }
