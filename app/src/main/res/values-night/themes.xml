@@ -1,6 +1,6 @@
 <resources>
     <!-- Base application theme. -->
-    <style name="Theme.VehicleDashboard" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="VehicleDashboardTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/purple_200</item>
         <item name="colorPrimaryVariant">@color/purple_700</item>
@@ -9,9 +9,14 @@
         <item name="colorSecondary">@color/teal_200</item>
         <item name="colorSecondaryVariant">@color/teal_200</item>
         <item name="colorOnSecondary">@color/black</item>
-    </style>
 
-    <style name="ThemeOverlay.VehicleDashboard.FullscreenContainer" parent="">
-        <item name="backgroundColor">@color/white</item>
+        <item name="android:actionBarStyle">
+            @style/Widget.Theme.VehicleDashboard.ActionBar.Fullscreen
+        </item>
+        <item name="android:windowActionBarOverlay">true</item>
+        <item name="android:windowBackground">@null</item>
+
+        <item name="barBackgroundColor">@color/black</item>
+        <item name="barColor">@color/white</item>
     </style>
 </resources>
