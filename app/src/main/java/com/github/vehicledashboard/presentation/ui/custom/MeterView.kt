@@ -6,7 +6,9 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
 import com.github.vehicledashboard.R
@@ -60,6 +62,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     private val txtPaint: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
         .apply {
             textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
         }
     private val needlePaint: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
         .apply {
@@ -103,7 +106,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             )
             val barValueTextSize = attributes.getDimensionPixelSize(
                 R.styleable.MeterView_barValueTextSize,
-                (DEFAULT_LABEL_TEXT_SIZE_SP * density).roundToInt()
+                (DEFAULT_BAR_TEXT_SIZE_SP * density).roundToInt()
             )
             txtPaint.textSize = barValueTextSize.toFloat()
             needlePaint.color = attributes.getColor(
@@ -134,7 +137,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
     fun setNeedleValue(progress: Float, duration: Long, startDelay: Long): ValueAnimator {
         require(progress > 0)
-        val va = ValueAnimator.ofObject(
+        return ValueAnimator.ofObject(
             object : TypeEvaluator<Float> {
                 override fun evaluate(fraction: Float, startValue: Float, endValue: Float): Float {
                     return startValue + fraction * (endValue - startValue)
@@ -142,17 +145,18 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             },
             needleValue,
             min(progress, barMaxValue)
-        )
-        va.duration = duration
-        va.startDelay = startDelay
-        va.addUpdateListener { animation ->
-            val value = animation.animatedValue as? Float
-            if (value != null) {
-                needleValue = value
+        ).apply {
+            this.duration = duration
+            this.startDelay = startDelay
+            this.addUpdateListener { animation ->
+                val value = animation.animatedValue as? Float
+                if (value != null) {
+                    needleValue = value
+                }
             }
+        }.also { va ->
+            va.start()
         }
-        va.start()
-        return va
     }
 
     fun setNeedleValue(progress: Float, animate: Boolean): ValueAnimator {
@@ -197,7 +201,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        canvas.drawColor(Color.TRANSPARENT) // clear canvas
+        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR) // clear canvas
 
         val oval = getOval(canvas)
         val center = min(width, height) / HALF
@@ -220,7 +224,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         val minorTicks = (majorTickStep / minorTickStep).toInt()
         val minorStepAngle = majorStepAngle / minorTicks
         val halfMinorStepAngle = getHalf(minorStepAngle)
-        val minorTicksLength = getHalf(30f)
+        val minorTicksLength = getHalf(DEFAULT_MAJOR_TICK_LENGTH)
         val radius = oval.width() * 0.48f
         var curProgress = 0f
         val centerX = oval.centerX()
@@ -254,9 +258,11 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 canvas.save()
                 canvas.rotate(PI_IN_DEGREES + currentAngle, centerX, centerY)
                 val txtX = centerX + radius - minorTicksLength - barValuePadding
-                canvas.rotate(BAR_TXT_ROTATION, txtX, centerY)
+                canvas.rotate(BAR_TEXT_ROTATION, txtX, centerY)
                 canvas.drawText(
-                    barValue, txtX, centerY,
+                    barValue,
+                    txtX,
+                    centerY + barValuePadding,
                     txtPaint
                 )
                 canvas.restore()
@@ -270,7 +276,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         majorTickStep * ARC_END_ANGLE / barMaxValue
 
     private fun drawNeedle(canvas: Canvas, oval: RectF, center: Float) {
-        val radius = oval.width() * 0.4f
+        val radius = oval.width() * 0.38f
         val smallOval = getOval(canvas, 0.2f)
         val majorStepAngle = calcMajorStepAngle()
         val angle = BAR_START_ANGLE + needleValue * majorStepAngle
@@ -316,12 +322,13 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         private const val UNSPECIFIED = -1f
         private const val ZERO = 0f
 
-        private const val DEFAULT_LABEL_TEXT_SIZE_SP = 12
-        private const val DEFAULT_PADDING_DP = 16
+        private const val DEFAULT_BAR_TEXT_SIZE_SP = 16
+        private const val DEFAULT_PADDING_DP = 8
 
         private const val ARC_STROKE_WIDTH = 5f
         private const val NEEDLE_STROKE_WIDTH = 5f
         private const val TICK_STROKE_WIDTH = 3f
+        private const val DEFAULT_MAJOR_TICK_LENGTH = 32f
 
         private const val BAR_START_ANGLE = -40f
         private const val ARC_START_ANGLE = 140f
@@ -333,6 +340,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
         private const val FACTOR_FULL = 1f
 
-        private const val BAR_TXT_ROTATION = 90f
+        private const val BAR_TEXT_ROTATION = 90f
     }
 }

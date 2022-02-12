@@ -11,11 +11,11 @@
         android:id="@+id/tachometer"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:padding="16dp"
+        android:layout_marginStart="@dimen/margin_standard"
+        android:padding="@dimen/margin_standard"
         app:barMajorStep="1"
         app:barMaxValue="8"
         app:barMinorStep="0.2"
-        app:barValuePadding="16dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:needleStartValue="0.8" />
@@ -24,11 +24,11 @@
         android:id="@+id/speedometer"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:padding="16dp"
+        android:layout_marginEnd="@dimen/margin_standard"
+        android:padding="@dimen/margin_standard"
         app:barMajorStep="20"
         app:barMaxValue="280"
         app:barMinorStep="10"
-        app:barValuePadding="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
