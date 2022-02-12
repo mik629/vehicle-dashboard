@@ -233,7 +233,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         val minorStepAngle = majorStepAngle / minorTicks
         val halfMinorStepAngle = getHalf(minorStepAngle)
         val minorTicksLength = getHalf(DEFAULT_MAJOR_TICK_LENGTH)
-        val radius = oval.width() * 0.48f
+        val radius = oval.width() * TICKS_RADIUS_COEFFICIENT
         var curProgress = 0f
         val centerX = oval.centerX()
         val centerY = oval.centerY()
@@ -284,8 +284,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         majorTickStep * ARC_END_ANGLE / barMaxValue
 
     private fun drawNeedle(canvas: Canvas, oval: RectF, center: Float) {
-        val radius = oval.width() * 0.38f
-        val smallOval = getOval(canvas, 0.2f)
+        val radius = oval.width() * NEEDLE_RADIUS_COEFFICIENT
+        val smallOval = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
         val majorStepAngle = calcMajorStepAngle()
         val angle = BAR_START_ANGLE + needleValue * majorStepAngle
         val ovalMiddle = getHalf(smallOval.width())
@@ -321,7 +321,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
     private fun getLabelFor(progress: Float): String =
         if (progress % majorTickStep == 0f) {
-            "%.0f".format(progress)
+            BAR_DIGIT_FORMAT.format(progress)
         } else {
             ""
         }
@@ -349,5 +349,10 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         private const val FACTOR_FULL = 1f
 
         private const val BAR_TEXT_ROTATION = 90f
+        private const val BAR_DIGIT_FORMAT = "%.0f"
+
+        private const val NEEDLE_RADIUS_COEFFICIENT = 0.38f
+        private const val NEEDLE_CIRCLE_RADIUS_COEFFICIENT = 0.2f
+        private const val TICKS_RADIUS_COEFFICIENT = 0.48f
     }
 }
