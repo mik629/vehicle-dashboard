@@ -1,6 +1,13 @@
 <resources>
-    <declare-styleable name="FullscreenAttrs">
-        <attr name="fullscreenBackgroundColor" format="color" />
-        <attr name="fullscreenTextColor" format="color" />
+    <declare-styleable name="MeterView">
+        <attr name="barBackgroundColor" format="color" />
+        <attr name="barMaxValue" format="integer" />
+        <attr name="barMajorStep" format="integer" />
+        <attr name="barMinorStep" format="integer" />
+        <attr name="barValuePadding" format="dimension" />
+        <attr name="barValueTextSize" format="dimension" />
+        <attr name="barColor" format="color" />
+        <attr name="android:fontFamily" />
+        <attr name="needleColor" format="color" />
     </declare-styleable>
 </resources>

@@ -1,22 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/fullscreenBackgroundColor"
     android:keepScreenOn="true"
     android:theme="@style/ThemeOverlay.VehicleDashboard.FullscreenContainer"
     tools:context=".presentation.ui.AppActivity">
 
-    <TextView
-        android:id="@+id/fullscreen_content"
+    <com.github.vehicledashboard.presentation.ui.custom.MeterView
+        android:id="@+id/speedometer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:keepScreenOn="true"
-        android:text="@string/dummy_content"
-        android:textColor="?attr/fullscreenTextColor"
-        android:textSize="50sp"
-        android:textStyle="bold" />
+        android:padding="16dp"
+        app:barBackgroundColor="?attr/backgroundColor"
+        app:barColor="@color/black"
+        app:barMajorStep="20"
+        app:barMaxValue="280"
+        app:barMinorStep="10"
+        app:barValuePadding="16dp" />
 
-</FrameLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
