@@ -69,6 +69,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             style = Paint.Style.STROKE
         }
 
+    private var barBackgroundColor: Int = 0
+
     init {
         val density = resources.displayMetrics.density
         val attributes = context.theme.obtainStyledAttributes(
@@ -77,10 +79,11 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             0, 0
         )
         try {
-            backgroundPaint.color = attributes.getColor(
+            barBackgroundColor = attributes.getColor(
                 R.styleable.MeterView_barBackgroundColor,
                 Color.WHITE // todo: replace with theme attr
             )
+            backgroundPaint.color = barBackgroundColor
             val barColor = attributes.getColor(
                 R.styleable.MeterView_barColor,
                 Color.BLACK // todo: replace with theme attr
@@ -205,6 +208,11 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
         val oval = getOval(canvas)
         val center = min(width, height) / HALF
+        backgroundPaint.color = if (isEnabled) {
+            barBackgroundColor
+        } else {
+            Color.GRAY
+        }
         drawBackground(canvas, center)
         drawArc(canvas, oval)
         drawTicks(canvas, oval)
