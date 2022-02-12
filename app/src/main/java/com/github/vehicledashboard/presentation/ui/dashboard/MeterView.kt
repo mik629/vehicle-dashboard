@@ -1,4 +1,4 @@
-package com.github.vehicledashboard.presentation.ui.custom
+package com.github.vehicledashboard.presentation.ui.dashboard
 
 import android.animation.TypeEvaluator
 import android.animation.ValueAnimator
