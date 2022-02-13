@@ -20,6 +20,19 @@
         app:layout_constraintTop_toTopOf="parent"
         app:needleStartValue="0.8" />
 
+    <Button
+        android:id="@+id/start_stop"
+        style="?attr/borderlessButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:elevation="1dp"
+        android:text="@string/start"
+        android:textColor="@color/green_500"
+        app:layout_constraintBottom_toBottomOf="@id/tachometer"
+        app:layout_constraintEnd_toEndOf="@id/tachometer"
+        app:layout_constraintStart_toStartOf="@id/tachometer" />
+
     <com.github.vehicledashboard.presentation.ui.dashboard.MeterView
         android:id="@+id/speedometer"
         android:layout_width="0dp"
@@ -31,5 +44,18 @@
         app:barMinorStep="10"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
+
+    <Button
+        android:id="@+id/go_break"
+        style="?attr/borderlessButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:elevation="1dp"
+        android:text="@string/go"
+        android:textColor="@color/selector_blue_grey"
+        app:layout_constraintBottom_toBottomOf="@id/speedometer"
+        app:layout_constraintEnd_toEndOf="@id/speedometer"
+        app:layout_constraintStart_toStartOf="@id/speedometer" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

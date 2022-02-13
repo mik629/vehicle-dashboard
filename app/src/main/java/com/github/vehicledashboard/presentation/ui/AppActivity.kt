@@ -7,10 +7,14 @@ import android.view.View
 import android.view.WindowInsets
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.github.vehicledashboard.R
 import com.github.vehicledashboard.databinding.AppActivityBinding
+import com.github.vehicledashboard.presentation.models.engineOppositeState
+import com.github.vehicledashboard.presentation.models.vehicleOppositeState
 import com.github.vehicledashboard.presentation.ui.dashboard.DashboardViewModel
 import com.github.vehicledashboard.presentation.ui.dashboard.MeterView
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +59,47 @@ class AppActivity : AppCompatActivity() {
             dashboardViewModel.speedometerValues,
             animationStartDelay = 0L
         )
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                dashboardViewModel.isEngineStarted.collect { isEngineStarted ->
+                    binding.goBreak.apply {
+                        isEnabled = isEngineStarted
+                        text = getString(R.string.go)
+                    }
+                }
+            }
+        }
+
+        binding.startStop.setOnClickListener {
+            val start = binding.startStop.text == getString(R.string.start)
+            val engineOppositeState = engineOppositeState(start)
+            dashboardViewModel.onEngineStartStopClick(start)
+            binding.startStop.apply {
+                text = getString(engineOppositeState.stringId)
+                setTextColor(
+                    ContextCompat.getColor(
+                        context,
+                        engineOppositeState.colorId
+                    )
+                )
+            }
+        }
+        binding.goBreak.setOnClickListener {
+            val go = binding.goBreak.text == getString(R.string.go)
+            dashboardViewModel.onGoBreakClick(go)
+            val vehicleOppositeState = vehicleOppositeState(go)
+            binding.goBreak.apply {
+                text = getString(vehicleOppositeState.stringId)
+                setTextColor(
+                    ContextCompat.getColor(
+                        context,
+                        vehicleOppositeState.colorId
+                    )
+                )
+            }
+
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

@@ -1,5 +1,8 @@
 <resources>
     <string name="app_name">VehicleDashboard</string>
-    <string name="dummy_button">Dummy Button</string>
-    <string name="dummy_content">DUMMY\nCONTENT</string>
+
+    <string name="start">start</string>
+    <string name="stop">stop</string>
+    <string name="go">go</string>
+    <string name="break_">break</string>
 </resources>
