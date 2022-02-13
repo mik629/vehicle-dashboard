@@ -45,8 +45,16 @@ class AppActivity : AppCompatActivity() {
         }
 
         switchVisibility(true)
-        subscribeMeterViewToValuesStream(binding.tachometer, dashboardViewModel.tachometerValues)
-        subscribeMeterViewToValuesStream(binding.speedometer, dashboardViewModel.speedometerValues)
+        subscribeMeterViewToValuesStream(
+            binding.tachometer,
+            dashboardViewModel.tachometerValues,
+            animationStartDelay = 0L
+        )
+        subscribeMeterViewToValuesStream(
+            binding.speedometer,
+            dashboardViewModel.speedometerValues,
+            animationStartDelay = 0L
+        )
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -86,11 +94,19 @@ class AppActivity : AppCompatActivity() {
         }
     }
 
-    private fun subscribeMeterViewToValuesStream(meterView: MeterView, valuesStream: Flow<Float>) {
+    private fun subscribeMeterViewToValuesStream(
+        meterView: MeterView,
+        valuesStream: Flow<Pair<Float, Long>>,
+        animationStartDelay: Long
+    ) {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 valuesStream.collect { nextValue ->
-                    meterView.needleValue = nextValue
+                    meterView.setNeedleValue(
+                        progress = nextValue.first,
+                        duration = nextValue.second,
+                        startDelay = animationStartDelay
+                    )
                 }
             }
         }

@@ -11,92 +11,93 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class DashboardViewModel : ViewModel() {
-    private val _tachometerValues: MutableSharedFlow<Float> =
-        MutableStateFlow(TACHOMETER_START_VALUE)
-    val tachometerValues: Flow<Float> = _tachometerValues
+    private val _tachometerValues: MutableSharedFlow<Pair<Float, Long>> =
+        MutableStateFlow(TACHOMETER_START_VALUE to 0)
+    val tachometerValues: Flow<Pair<Float, Long>> = _tachometerValues
 
-    private val _speedometerValues: MutableSharedFlow<Float> =
-        MutableStateFlow(SPEEDOMETER_START_VALUE)
-    val speedometerValues: Flow<Float> = _speedometerValues
+    private val _speedometerValues: MutableSharedFlow<Pair<Float, Long>> =
+        MutableStateFlow(SPEEDOMETER_START_VALUE to 0)
+    val speedometerValues: Flow<Pair<Float, Long>> = _speedometerValues
 
     init {
         viewModelScope.launch {
             withContext(Dispatchers.Default) {
-                val delayCoefficient = 10L
-                val stepDelay = 50L
-                val endDelay = 100L
-                val firstGearUpRange = 1..21
-                val gearUpRange = 16..32
-                val gearDownRange = 1..16
+                val downDelay = 2500L
+                val upDelay = 2000L
+                val durationUp = 1000L
+                val durationDown = 1200L
+                val firstGearRange = 1..24
+                val gearRange = 1..16
                 var nextValue = generateNextValues(
                     _tachometerValues,
                     startValue = TACHOMETER_START_VALUE,
                     step = TACHOMETER_STEP,
-                    firstGearUpRange,
-                    stepDelay = { i -> i * delayCoefficient },
-                    endDelay = endDelay
+                    firstGearRange,
+                    animationDuration = durationUp,
+                    endDelay = downDelay
                 )
                 nextValue = generateNextValues(
                     _tachometerValues,
                     startValue = nextValue,
                     step = -TACHOMETER_STEP,
-                    gearDownRange,
-                    stepDelay = { stepDelay },
-                    endDelay = endDelay
+                    gearRange,
+                    animationDuration = durationDown,
+                    endDelay = downDelay
                 )
                 nextValue = generateNextValues(
                     _tachometerValues,
                     startValue = nextValue,
                     step = TACHOMETER_STEP,
-                    gearUpRange,
-                    stepDelay = { i -> i * delayCoefficient },
-                    endDelay = endDelay
+                    gearRange,
+                    animationDuration = durationUp,
+                    endDelay = upDelay
                 )
                 nextValue = generateNextValues(
                     _tachometerValues,
                     startValue = nextValue,
                     step = -TACHOMETER_STEP,
-                    gearDownRange,
-                    stepDelay = { stepDelay },
-                    endDelay = endDelay
+                    gearRange,
+                    animationDuration = durationDown,
+                    endDelay = downDelay
                 )
                 generateNextValues(
                     _tachometerValues,
                     startValue = nextValue,
                     step = TACHOMETER_STEP,
-                    gearUpRange,
-                    stepDelay = { i -> i * delayCoefficient },
-                    endDelay = endDelay
+                    gearRange,
+                    animationDuration = durationUp + 1000,
+                    endDelay = upDelay
                 )
             }
         }
 
         viewModelScope.launch {
             withContext(Dispatchers.Default) {
-                val stepDelay = 200L
-                val gearSwitchDelay = 1500L
+                val gearSwitchDelay = 5000L
+                val duration = 2500L
+                val gearRange = 0..16
                 var nextValue = generateNextValues(
                     _speedometerValues,
                     startValue = SPEEDOMETER_START_VALUE,
                     step = SPEEDOMETER_STEP,
-                    1..12,
-                    stepDelay = { stepDelay },
+                    gearRange,
+                    animationDuration = duration,
                     endDelay = gearSwitchDelay
                 )
                 nextValue = generateNextValues(
                     _speedometerValues,
                     startValue = nextValue,
                     step = SPEEDOMETER_STEP,
-                    13..30,
-                    stepDelay = { stepDelay },
+                    gearRange,
+                    animationDuration = duration,
                     endDelay = gearSwitchDelay
                 )
                 generateNextValues(
                     _speedometerValues,
                     startValue = nextValue,
                     step = SPEEDOMETER_STEP,
-                    31..48,
-                    stepDelay = { stepDelay },
+                    gearRange,
+                    animationDuration = duration,
                     endDelay = gearSwitchDelay
                 )
             }
@@ -111,21 +112,17 @@ class DashboardViewModel : ViewModel() {
         private const val TACHOMETER_STEP = 0.2f
 
         suspend fun generateNextValues(
-            flow: MutableSharedFlow<Float>,
+            flow: MutableSharedFlow<Pair<Float, Long>>,
             startValue: Float,
             step: Float,
-            range: IntRange,
-            stepDelay: (Int) -> Long,
+            gearRange: IntRange,
+            animationDuration: Long,
             endDelay: Long
-        ): Float {
-            var nextValue = startValue
-            for (i in range) {
-                nextValue += step
-                flow.emit(nextValue)
-                delay(stepDelay(i))
-            }
-            delay(endDelay)
-            return nextValue
-        }
+        ): Float =
+            (startValue + (gearRange.last - gearRange.first) * step)
+                .also { nextValue ->
+                    flow.emit(nextValue to animationDuration)
+                    delay(endDelay)
+                }
     }
 }

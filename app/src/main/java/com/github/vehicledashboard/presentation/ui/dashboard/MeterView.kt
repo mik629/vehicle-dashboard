@@ -22,6 +22,11 @@ import kotlin.math.sin
 
 class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, attributeSet) {
 
+    private val typeEvaluator = object : TypeEvaluator<Float> {
+        override fun evaluate(fraction: Float, startValue: Float, endValue: Float): Float =
+            startValue + fraction * (endValue - startValue)
+    }
+
     private var barMaxValue: Float = UNSPECIFIED
         set(value) {
             require(value > 0)
@@ -155,20 +160,10 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         invalidate()
     }
 
-    fun setNeedleValue(progress: Float): ValueAnimator {
-        return setNeedleValue(progress, 1500, 100)
-    }
-
-    private fun setNeedleValue(progress: Float, duration: Long, startDelay: Long): ValueAnimator {
+    fun setNeedleValue(progress: Float, duration: Long, startDelay: Long): ValueAnimator {
         require(progress > 0)
         return ValueAnimator.ofObject(
-            object : TypeEvaluator<Float> {
-                override fun evaluate(fraction: Float, startValue: Float, endValue: Float): Float {
-                    val nextValue = startValue + fraction * (endValue - startValue)
-                    println("AnimatedValue: $nextValue")
-                    return nextValue
-                }
-            },
+            typeEvaluator,
             needleValue,
             min(progress, barMaxValue)
         ).apply {
