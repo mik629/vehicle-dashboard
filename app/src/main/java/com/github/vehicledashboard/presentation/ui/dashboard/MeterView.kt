@@ -12,6 +12,8 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
 import com.github.vehicledashboard.R
+import com.github.vehicledashboard.domain.PI_IN_DEGREES
+import com.github.vehicledashboard.domain.degreesToRadians
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -40,7 +42,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             field = value
         }
 
-    private var needleValue: Float = ZERO
+    var needleValue: Float = ZERO
         set(value) {
             require(value >= 0)
             field = min(barMaxValue, value)
@@ -70,6 +72,14 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }
 
     private var barBackgroundColor: Int = 0
+
+    private var majorStepAngle = 0f
+    private var minorTicks = 0
+    private var minorStepAngle = 0f
+    private var halfMinorStepAngle = 0f
+    private var minorTicksLength = 0f
+
+    private var tickLines: FloatArray = floatArrayOf()
 
     init {
         val density = resources.displayMetrics.density
@@ -135,15 +145,28 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         arcPaint.strokeWidth = ARC_STROKE_WIDTH
         ticksPaint.strokeWidth = TICK_STROKE_WIDTH
         needlePaint.strokeWidth = NEEDLE_STROKE_WIDTH
+
+        majorStepAngle = calcMajorStepAngle()
+        minorTicks = (majorTickStep / minorTickStep).toInt()
+        minorStepAngle = majorStepAngle / minorTicks
+        halfMinorStepAngle = getHalf(minorStepAngle)
+        minorTicksLength = getHalf(DEFAULT_MAJOR_TICK_LENGTH)
+
         invalidate()
     }
 
-    fun setNeedleValue(progress: Float, duration: Long, startDelay: Long): ValueAnimator {
+    fun setNeedleValue(progress: Float): ValueAnimator {
+        return setNeedleValue(progress, 1500, 100)
+    }
+
+    private fun setNeedleValue(progress: Float, duration: Long, startDelay: Long): ValueAnimator {
         require(progress > 0)
         return ValueAnimator.ofObject(
             object : TypeEvaluator<Float> {
                 override fun evaluate(fraction: Float, startValue: Float, endValue: Float): Float {
-                    return startValue + fraction * (endValue - startValue)
+                    val nextValue = startValue + fraction * (endValue - startValue)
+                    println("AnimatedValue: $nextValue")
+                    return nextValue
                 }
             },
             needleValue,
@@ -160,10 +183,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }.also { va ->
             va.start()
         }
-    }
-
-    fun setNeedleValue(progress: Float, animate: Boolean): ValueAnimator {
-        return setNeedleValue(progress, 1500, 200)
     }
 
     // fixme: refactor
@@ -228,11 +247,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     }
 
     private fun drawTicks(canvas: Canvas, oval: RectF) {
-        val majorStepAngle = calcMajorStepAngle()
-        val minorTicks = (majorTickStep / minorTickStep).toInt()
-        val minorStepAngle = majorStepAngle / minorTicks
-        val halfMinorStepAngle = getHalf(minorStepAngle)
-        val minorTicksLength = getHalf(DEFAULT_MAJOR_TICK_LENGTH)
         val radius = oval.width() * TICKS_RADIUS_COEFFICIENT
         var curProgress = 0f
         val centerX = oval.centerX()
@@ -240,27 +254,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
         var currentAngle = BAR_START_ANGLE
         val endAngle = ARC_END_ANGLE + currentAngle
+
         while (currentAngle <= endAngle) {
-            canvas.drawLine(
-                centerX + cosInRadians(currentAngle) * (radius - minorTicksLength),
-                centerY - sinInRadians(currentAngle) * (radius - minorTicksLength),
-                centerX + cosInRadians(currentAngle) * (radius + minorTicksLength),
-                centerY - sinInRadians(currentAngle) * (radius + minorTicksLength),
-                ticksPaint
-            )
-            for (i in 1..minorTicks) {
-                val angle = currentAngle + i * minorStepAngle
-                if (angle >= endAngle + halfMinorStepAngle) {
-                    break
-                }
-                canvas.drawLine(
-                    centerX + cosInRadians(angle) * radius,
-                    centerY - sinInRadians(angle) * radius,
-                    centerX + cosInRadians(angle) * (radius + minorTicksLength),
-                    centerY - sinInRadians(angle) * (radius + minorTicksLength),
-                    ticksPaint
-                )
-            }
             val barValue = getLabelFor(curProgress)
             if (barValue.isNotBlank()) {
                 canvas.save()
@@ -278,6 +273,45 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             currentAngle += majorStepAngle
             curProgress += majorTickStep
         }
+
+        if (tickLines.isEmpty()) {
+            tickLines = buildTicks(oval)
+        }
+        canvas.drawLines(tickLines, ticksPaint)
+    }
+
+    private fun buildTicks(oval: RectF): FloatArray {
+        val radius = oval.width() * TICKS_RADIUS_COEFFICIENT
+        var curProgress = 0f
+        val centerX = oval.centerX()
+        val centerY = oval.centerY()
+
+        var currentAngle = BAR_START_ANGLE
+        val endAngle = ARC_END_ANGLE + currentAngle
+
+        val barTickStartPosition = radius - minorTicksLength
+        val barTickEndPosition = radius + minorTicksLength
+        val lines = mutableListOf<Float>()
+        while (currentAngle <= endAngle) {
+            lines.add(centerX + cosInRadians(currentAngle) * barTickStartPosition)
+            lines.add(centerY - sinInRadians(currentAngle) * barTickStartPosition)
+            lines.add(centerX + cosInRadians(currentAngle) * barTickEndPosition)
+            lines.add(centerY - sinInRadians(currentAngle) * barTickEndPosition)
+
+            for (i in 1..minorTicks) {
+                val angle = currentAngle + i * minorStepAngle
+                if (angle >= endAngle + halfMinorStepAngle) {
+                    break
+                }
+                lines.add(centerX + cosInRadians(angle) * radius)
+                lines.add(centerY - sinInRadians(angle) * radius)
+                lines.add(centerX + cosInRadians(angle) * barTickEndPosition)
+                lines.add(centerY - sinInRadians(angle) * barTickEndPosition)
+            }
+            currentAngle += majorStepAngle
+            curProgress += majorTickStep
+        }
+        return lines.toFloatArray()
     }
 
     private fun calcMajorStepAngle() =
@@ -286,7 +320,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     private fun drawNeedle(canvas: Canvas, oval: RectF, center: Float) {
         val radius = oval.width() * NEEDLE_RADIUS_COEFFICIENT
         val smallOval = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
-        val majorStepAngle = calcMajorStepAngle()
+        val majorStepAngle = ARC_END_ANGLE / barMaxValue
         val angle = BAR_START_ANGLE + needleValue * majorStepAngle
         val ovalMiddle = getHalf(smallOval.width())
         canvas.drawLine(
@@ -300,10 +334,10 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     }
 
     private fun sinInRadians(currentAngle: Float) =
-        sin(currentAngle / PI_IN_DEGREES * Math.PI).toFloat()
+        sin(degreesToRadians(currentAngle))
 
     private fun cosInRadians(currentAngle: Float) =
-        cos((PI_IN_DEGREES - currentAngle) / PI_IN_DEGREES * Math.PI).toFloat()
+        cos(degreesToRadians(PI_IN_DEGREES - currentAngle))
 
     private fun getHalf(majorTicksLength: Float) = majorTicksLength / HALF
 
@@ -341,8 +375,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         private const val BAR_START_ANGLE = -40f
         private const val ARC_START_ANGLE = 140f
         private const val ARC_END_ANGLE = 260f
-
-        private const val PI_IN_DEGREES = 180
 
         private const val HALF = 2f
 

@@ -5,12 +5,21 @@ import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.github.vehicledashboard.databinding.AppActivityBinding
+import com.github.vehicledashboard.presentation.ui.dashboard.DashboardViewModel
+import com.github.vehicledashboard.presentation.ui.dashboard.MeterView
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 
 class AppActivity : AppCompatActivity() {
 
     private lateinit var binding: AppActivityBinding
+    private val dashboardViewModel: DashboardViewModel by viewModels()
 
     private var firstTouchX = 0f
 
@@ -36,6 +45,8 @@ class AppActivity : AppCompatActivity() {
         }
 
         switchVisibility(true)
+        subscribeMeterViewToValuesStream(binding.tachometer, dashboardViewModel.tachometerValues)
+        subscribeMeterViewToValuesStream(binding.speedometer, dashboardViewModel.speedometerValues)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -45,7 +56,7 @@ class AppActivity : AppCompatActivity() {
                 false
             }
             MotionEvent.ACTION_MOVE -> {
-                if (event.pointerCount == 2) {
+                if (event.pointerCount == COUNT_TWO_FINGERS) {
                     switchVisibility(event.x - firstTouchX > 0)
                     true
                 } else {
@@ -60,7 +71,7 @@ class AppActivity : AppCompatActivity() {
         binding.tachometer.apply {
             this.isEnabled = isVisible
             this.elevation = if (isVisible) {
-                ELEVATION_TWO
+                ELEVATION_DEFAULT
             } else {
                 ELEVATION_ZERO
             }
@@ -68,15 +79,27 @@ class AppActivity : AppCompatActivity() {
         binding.speedometer.apply {
             this.isEnabled = !isVisible
             this.elevation = if (!isVisible) {
-                ELEVATION_TWO
+                ELEVATION_DEFAULT
             } else {
                 ELEVATION_ZERO
             }
         }
     }
 
+    private fun subscribeMeterViewToValuesStream(meterView: MeterView, valuesStream: Flow<Float>) {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                valuesStream.collect { nextValue ->
+                    meterView.needleValue = nextValue
+                }
+            }
+        }
+    }
+
     companion object {
         private const val ELEVATION_ZERO = 0f
-        private const val ELEVATION_TWO = 2f
+        private const val ELEVATION_DEFAULT = 2f
+
+        private const val COUNT_TWO_FINGERS = 2
     }
 }
