@@ -13,11 +13,12 @@ import android.util.AttributeSet
 import android.view.View
 import com.github.vehicledashboard.R
 import com.github.vehicledashboard.domain.PI_IN_DEGREES
-import com.github.vehicledashboard.domain.degreesToRadians
-import kotlin.math.cos
+import com.github.vehicledashboard.domain.calcMajorStepAngle
+import com.github.vehicledashboard.domain.cosInRadians
+import com.github.vehicledashboard.domain.inBetweenExclusive
+import com.github.vehicledashboard.domain.sinInRadians
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 
 class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, attributeSet) {
@@ -29,7 +30,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
     private var barMaxValue: Float = UNSPECIFIED
         set(value) {
-            require(value > 0)
+            require(value > ZERO)
             field = value
         }
 
@@ -37,19 +38,19 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
     private var majorTickStep = UNSPECIFIED
         set(value) {
-            require(value > 0 && value < barMaxValue)
+            require(inBetweenExclusive(value = value, start = ZERO, end = barMaxValue))
             field = value
         }
 
     private var minorTickStep = UNSPECIFIED
         set(value) {
-            require(value > 0 && value < barMaxValue)
+            require(inBetweenExclusive(value = value, start = ZERO, end = barMaxValue))
             field = value
         }
 
     var needleValue: Float = ZERO
         set(value) {
-            require(value >= 0)
+            require(value >= ZERO)
             field = min(barMaxValue, value)
             invalidate()
         }
@@ -151,7 +152,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         ticksPaint.strokeWidth = TICK_STROKE_WIDTH
         needlePaint.strokeWidth = NEEDLE_STROKE_WIDTH
 
-        majorStepAngle = calcMajorStepAngle()
+        majorStepAngle =
+            calcMajorStepAngle(step = majorTickStep, angle = ARC_END_ANGLE, maxVal = barMaxValue)
         minorTicks = (majorTickStep / minorTickStep).toInt()
         minorStepAngle = majorStepAngle / minorTicks
         halfMinorStepAngle = getHalf(minorStepAngle)
@@ -161,7 +163,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     }
 
     fun setNeedleValue(progress: Float, duration: Long, startDelay: Long): ValueAnimator {
-        require(progress > 0)
+        require(progress >= 0)
         return ValueAnimator.ofObject(
             typeEvaluator,
             needleValue,
@@ -246,16 +248,15 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         var curProgress = 0f
         val centerX = oval.centerX()
         val centerY = oval.centerY()
+        val txtX = centerX + radius - minorTicksLength - barValuePadding
 
         var currentAngle = BAR_START_ANGLE
         val endAngle = ARC_END_ANGLE + currentAngle
-
         while (currentAngle <= endAngle) {
             val barValue = getLabelFor(curProgress)
             if (barValue.isNotBlank()) {
                 canvas.save()
                 canvas.rotate(PI_IN_DEGREES + currentAngle, centerX, centerY)
-                val txtX = centerX + radius - minorTicksLength - barValuePadding
                 canvas.rotate(BAR_TEXT_ROTATION, txtX, centerY)
                 canvas.drawText(
                     barValue,
@@ -275,6 +276,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         canvas.drawLines(tickLines, ticksPaint)
     }
 
+    // fixme: move calculations away from UI thread
     private fun buildTicks(oval: RectF): FloatArray {
         val radius = oval.width() * TICKS_RADIUS_COEFFICIENT
         var curProgress = 0f
@@ -309,9 +311,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         return lines.toFloatArray()
     }
 
-    private fun calcMajorStepAngle() =
-        majorTickStep * ARC_END_ANGLE / barMaxValue
-
     private fun drawNeedle(canvas: Canvas, oval: RectF, center: Float) {
         val radius = oval.width() * NEEDLE_RADIUS_COEFFICIENT
         val smallOval = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
@@ -327,12 +326,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         )
         canvas.drawCircle(center, center, ovalMiddle, ticksPaint)
     }
-
-    private fun sinInRadians(currentAngle: Float) =
-        sin(degreesToRadians(currentAngle))
-
-    private fun cosInRadians(currentAngle: Float) =
-        cos(degreesToRadians(PI_IN_DEGREES - currentAngle))
 
     private fun getHalf(majorTicksLength: Float) = majorTicksLength / HALF
 
