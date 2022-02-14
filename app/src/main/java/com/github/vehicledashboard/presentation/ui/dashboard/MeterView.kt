@@ -6,7 +6,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.PorterDuff
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.util.AttributeSet
@@ -23,10 +22,8 @@ import kotlin.math.roundToInt
 
 class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, attributeSet) {
 
-    private val typeEvaluator = object : TypeEvaluator<Float> {
-        override fun evaluate(fraction: Float, startValue: Float, endValue: Float): Float =
-            startValue + fraction * (endValue - startValue)
-    }
+    private val typeEvaluator =
+        TypeEvaluator<Float> { fraction, startValue, endValue -> startValue + fraction * (endValue - startValue) }
 
     private var barMaxValue: Float = UNSPECIFIED
         set(value) {
@@ -48,7 +45,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             field = value
         }
 
-    var needleValue: Float = ZERO
+    private var needleValue: Float = ZERO
         set(value) {
             require(value >= ZERO)
             field = min(barMaxValue, value)
@@ -220,8 +217,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR) // clear canvas
-
         val oval = getOval(canvas)
         val center = min(width, height) / HALF
         backgroundPaint.color = if (isEnabled) {
@@ -253,7 +248,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         var currentAngle = BAR_START_ANGLE
         val endAngle = ARC_END_ANGLE + currentAngle
         while (currentAngle <= endAngle) {
-            val barValue = getLabelFor(curProgress)
+            val barValue = getBarValue(curProgress)
             if (barValue.isNotBlank()) {
                 canvas.save()
                 canvas.rotate(PI_IN_DEGREES + currentAngle, centerX, centerY)
@@ -271,17 +266,19 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }
 
         if (tickLines.isEmpty()) {
-            tickLines = buildTicks(oval)
+            tickLines = buildTicks(
+                viewWidth = oval.width(),
+                centerX = oval.centerX(),
+                centerY = oval.centerY()
+            )
         }
         canvas.drawLines(tickLines, ticksPaint)
     }
 
     // fixme: move calculations away from UI thread
-    private fun buildTicks(oval: RectF): FloatArray {
-        val radius = oval.width() * TICKS_RADIUS_COEFFICIENT
+    private fun buildTicks(viewWidth: Float, centerX: Float, centerY: Float): FloatArray {
+        val radius = viewWidth * TICKS_RADIUS_COEFFICIENT
         var curProgress = 0f
-        val centerX = oval.centerX()
-        val centerY = oval.centerY()
 
         var currentAngle = BAR_START_ANGLE
         val endAngle = ARC_END_ANGLE + currentAngle
@@ -341,7 +338,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         )
     }
 
-    private fun getLabelFor(progress: Float): String =
+    private fun getBarValue(progress: Float): String =
         if (progress % majorTickStep == 0f) {
             BAR_DIGIT_FORMAT.format(progress)
         } else {
