@@ -10,5 +10,9 @@
         <attr name="android:fontFamily" />
         <attr name="needleColor" format="color" />
         <attr name="needleStartValue" format="float" />
+        <attr name="meterType" format="enum">
+            <enum name="SPEEDOMETER" value="0" />
+            <enum name="TACHOMETER" value="1" />
+        </attr>
     </declare-styleable>
 </resources>

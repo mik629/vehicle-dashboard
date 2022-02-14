@@ -10,17 +10,32 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
+import androidx.lifecycle.flowWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.github.vehicledashboard.R
-import com.github.vehicledashboard.domain.PI_IN_DEGREES
 import com.github.vehicledashboard.domain.calcMajorStepAngle
 import com.github.vehicledashboard.domain.cosInRadians
+import com.github.vehicledashboard.domain.getHalf
 import com.github.vehicledashboard.domain.inBetweenExclusive
 import com.github.vehicledashboard.domain.sinInRadians
+import com.github.vehicledashboard.presentation.models.BarLabel
+import com.github.vehicledashboard.presentation.models.MeterType
+import com.github.vehicledashboard.presentation.models.fromId
+import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 
 class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, attributeSet) {
+    private val dashboardViewModel: DashboardViewModel by lazy {
+        ViewModelProvider(
+            requireNotNull(findViewTreeViewModelStoreOwner())
+        )[DashboardViewModel::class.java]
+    }
 
     private val typeEvaluator =
         TypeEvaluator<Float> { fraction, startValue, endValue -> startValue + fraction * (endValue - startValue) }
@@ -80,9 +95,11 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     private var minorTicks = 0
     private var minorStepAngle = 0f
     private var halfMinorStepAngle = 0f
-    private var minorTicksLength = 0f
+
+    private var meterType: MeterType = MeterType.UNKNOWN
 
     private var tickLines: FloatArray = floatArrayOf()
+    private var barLabels: List<BarLabel> = listOf()
 
     init {
         val density = resources.displayMetrics.density
@@ -133,6 +150,12 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 R.styleable.MeterView_needleStartValue,
                 ZERO
             )
+            meterType = fromId(
+                attributes.getInt(
+                    R.styleable.MeterView_meterType,
+                    MeterType.UNKNOWN.id
+                )
+            )
         } finally {
             attributes.recycle()
         }
@@ -154,14 +177,12 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         minorTicks = (majorTickStep / minorTickStep).toInt()
         minorStepAngle = majorStepAngle / minorTicks
         halfMinorStepAngle = getHalf(minorStepAngle)
-        minorTicksLength = getHalf(DEFAULT_MAJOR_TICK_LENGTH)
-
-        invalidate()
     }
 
-    fun setNeedleValue(progress: Float, duration: Long, startDelay: Long): ValueAnimator {
+    // todo: optimize?
+    fun setNeedleValue(progress: Float, duration: Long, startDelay: Long) {
         require(progress >= 0)
-        return ValueAnimator.ofObject(
+        ValueAnimator.ofObject(
             typeEvaluator,
             needleValue,
             min(progress, barMaxValue)
@@ -177,6 +198,40 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }.also { va ->
             va.start()
         }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        val lifecycleOwner = requireNotNull(findViewTreeLifecycleOwner())
+        lifecycleOwner
+            .lifecycleScope
+            .launch {
+                when (meterType) {
+                    MeterType.SPEEDOMETER -> dashboardViewModel.speedometerTicks
+                    MeterType.TACHOMETER -> dashboardViewModel.tachometerTicks
+                    MeterType.UNKNOWN -> throw UnsupportedOperationException()
+                }
+                    .flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+                    .collect { ticks ->
+                        tickLines = ticks
+                        invalidate()
+                    }
+            }
+
+        lifecycleOwner
+            .lifecycleScope
+            .launch {
+                when (meterType) {
+                    MeterType.SPEEDOMETER -> dashboardViewModel.speedometerBarLabels
+                    MeterType.TACHOMETER -> dashboardViewModel.tachometerBarLabels
+                    MeterType.UNKNOWN -> throw UnsupportedOperationException()
+                }
+                    .flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+                    .collect { bars ->
+                        barLabels = bars
+                        invalidate()
+                    }
+            }
     }
 
     // fixme: refactor
@@ -217,17 +272,28 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val oval = getOval(canvas)
-        val center = min(width, height) / HALF
         backgroundPaint.color = if (isEnabled) {
             barBackgroundColor
         } else {
             Color.GRAY
         }
+
+        val oval = getOval(canvas)
+        val center = getHalf(min(width, height).toFloat())
         drawBackground(canvas, center)
         drawArc(canvas, oval)
-        drawTicks(canvas, oval)
-        drawNeedle(canvas, oval, center)
+
+        val centerX = oval.centerX()
+        val centerY = oval.centerY()
+        val viewWidth = oval.width()
+        drawTicks(canvas, centerX = centerX, centerY = centerY, viewWidth = viewWidth)
+        drawNeedle(
+            canvas,
+            centerX = centerX,
+            centerY = centerY,
+            viewWidth = viewWidth,
+            center = center
+        )
     }
 
     private fun drawBackground(canvas: Canvas, center: Float) {
@@ -238,93 +304,72 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         canvas.drawArc(oval, ARC_START_ANGLE, ARC_END_ANGLE, false, arcPaint)
     }
 
-    private fun drawTicks(canvas: Canvas, oval: RectF) {
-        val radius = oval.width() * TICKS_RADIUS_COEFFICIENT
-        var curProgress = 0f
-        val centerX = oval.centerX()
-        val centerY = oval.centerY()
-        val txtX = centerX + radius - minorTicksLength - barValuePadding
+    private fun drawTicks(canvas: Canvas, centerX: Float, centerY: Float, viewWidth: Float) {
+        if (barLabels.isEmpty()) {
+            dashboardViewModel.buildBarLabels(
+                majorTickStep = majorTickStep,
+                barMaxValue = barMaxValue,
+                meterType = meterType
+            )
+        } else {
+            val radius = viewWidth * TICKS_RADIUS_COEFFICIENT
+            val txtX = centerX + radius - getHalf(DEFAULT_MAJOR_TICK_LENGTH) - barValuePadding
+            val txtY = centerY + barValuePadding
 
-        var currentAngle = BAR_START_ANGLE
-        val endAngle = ARC_END_ANGLE + currentAngle
-        while (currentAngle <= endAngle) {
-            val barValue = getBarValue(curProgress)
-            if (barValue.isNotBlank()) {
+            for (barLabel in barLabels) {
                 canvas.save()
-                canvas.rotate(PI_IN_DEGREES + currentAngle, centerX, centerY)
+                canvas.rotate(barLabel.rotationAngle, centerX, centerY)
                 canvas.rotate(BAR_TEXT_ROTATION, txtX, centerY)
                 canvas.drawText(
-                    barValue,
+                    barLabel.label,
                     txtX,
-                    centerY + barValuePadding,
+                    txtY,
                     txtPaint
                 )
                 canvas.restore()
             }
-            currentAngle += majorStepAngle
-            curProgress += majorTickStep
         }
 
         if (tickLines.isEmpty()) {
-            tickLines = buildTicks(
-                viewWidth = oval.width(),
-                centerX = oval.centerX(),
-                centerY = oval.centerY()
+            dashboardViewModel.buildTicks(
+                viewWidth = viewWidth,
+                centerX = centerX,
+                centerY = centerY,
+                majorTickLength = DEFAULT_MAJOR_TICK_LENGTH,
+                majorTickStep = majorTickStep,
+                minorTickStep = minorTickStep,
+                barMaxValue = barMaxValue,
+                meterType = meterType
             )
+        } else {
+            canvas.drawLines(tickLines, ticksPaint)
         }
-        canvas.drawLines(tickLines, ticksPaint)
     }
 
     // fixme: move calculations away from UI thread
-    private fun buildTicks(viewWidth: Float, centerX: Float, centerY: Float): FloatArray {
-        val radius = viewWidth * TICKS_RADIUS_COEFFICIENT
-        var curProgress = 0f
-
-        var currentAngle = BAR_START_ANGLE
-        val endAngle = ARC_END_ANGLE + currentAngle
-
-        val barTickStartPosition = radius - minorTicksLength
-        val barTickEndPosition = radius + minorTicksLength
-        val lines = mutableListOf<Float>()
-        while (currentAngle <= endAngle) {
-            lines.add(centerX + cosInRadians(currentAngle) * barTickStartPosition)
-            lines.add(centerY - sinInRadians(currentAngle) * barTickStartPosition)
-            lines.add(centerX + cosInRadians(currentAngle) * barTickEndPosition)
-            lines.add(centerY - sinInRadians(currentAngle) * barTickEndPosition)
-
-            for (i in 1..minorTicks) {
-                val angle = currentAngle + i * minorStepAngle
-                if (angle >= endAngle + halfMinorStepAngle) {
-                    break
-                }
-                lines.add(centerX + cosInRadians(angle) * radius)
-                lines.add(centerY - sinInRadians(angle) * radius)
-                lines.add(centerX + cosInRadians(angle) * barTickEndPosition)
-                lines.add(centerY - sinInRadians(angle) * barTickEndPosition)
-            }
-            currentAngle += majorStepAngle
-            curProgress += majorTickStep
-        }
-        return lines.toFloatArray()
-    }
-
-    private fun drawNeedle(canvas: Canvas, oval: RectF, center: Float) {
-        val radius = oval.width() * NEEDLE_RADIUS_COEFFICIENT
+    private fun drawNeedle(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        viewWidth: Float,
+        center: Float
+    ) {
+        val radius = viewWidth * NEEDLE_RADIUS_COEFFICIENT
         val smallOval = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
         val majorStepAngle = ARC_END_ANGLE / barMaxValue
         val angle = BAR_START_ANGLE + needleValue * majorStepAngle
         val ovalMiddle = getHalf(smallOval.width())
+        val cosOfAngle = cosInRadians(angle)
+        val sinOfAngle = sinInRadians(angle)
         canvas.drawLine(
-            oval.centerX() + cosInRadians(angle) * ovalMiddle,
-            oval.centerY() - sinInRadians(angle) * ovalMiddle,
-            oval.centerX() + cosInRadians(angle) * radius,
-            oval.centerY() - sinInRadians(angle) * radius,
+            centerX + cosOfAngle * ovalMiddle,
+            centerY - sinOfAngle * ovalMiddle,
+            centerX + cosOfAngle * radius,
+            centerY - sinOfAngle * radius,
             needlePaint
         )
         canvas.drawCircle(center, center, ovalMiddle, ticksPaint)
     }
-
-    private fun getHalf(majorTicksLength: Float) = majorTicksLength / HALF
 
     private fun getOval(canvas: Canvas, factor: Float = FACTOR_FULL): RectF {
         val canvasWidth = canvas.width - paddingLeft - paddingRight
@@ -338,13 +383,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         )
     }
 
-    private fun getBarValue(progress: Float): String =
-        if (progress % majorTickStep == 0f) {
-            BAR_DIGIT_FORMAT.format(progress)
-        } else {
-            ""
-        }
-
     companion object {
         private const val UNSPECIFIED = -1f
         private const val ZERO = 0f
@@ -357,19 +395,16 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         private const val TICK_STROKE_WIDTH = 3f
         private const val DEFAULT_MAJOR_TICK_LENGTH = 32f
 
-        private const val BAR_START_ANGLE = -40f
+        const val BAR_START_ANGLE = -40f
         private const val ARC_START_ANGLE = 140f
-        private const val ARC_END_ANGLE = 260f
-
-        private const val HALF = 2f
+        const val ARC_END_ANGLE = 260f
 
         private const val FACTOR_FULL = 1f
 
         private const val BAR_TEXT_ROTATION = 90f
-        private const val BAR_DIGIT_FORMAT = "%.0f"
 
         private const val NEEDLE_RADIUS_COEFFICIENT = 0.38f
         private const val NEEDLE_CIRCLE_RADIUS_COEFFICIENT = 0.2f
-        private const val TICKS_RADIUS_COEFFICIENT = 0.48f
+        const val TICKS_RADIUS_COEFFICIENT = 0.48f
     }
 }

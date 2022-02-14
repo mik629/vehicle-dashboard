@@ -20,3 +20,6 @@ fun calcMajorStepAngle(step: Float, angle: Float, maxVal: Float): Float =
 
 fun inBetweenExclusive(value: Float, start: Float, end: Float): Boolean =
     value > start && value < end
+
+fun getHalf(value: Float) =
+    value / 2

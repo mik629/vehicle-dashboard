@@ -9,8 +9,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import com.github.vehicledashboard.R
 import com.github.vehicledashboard.databinding.AppActivityBinding
 import com.github.vehicledashboard.presentation.models.engineOppositeState
@@ -61,14 +61,14 @@ class AppActivity : AppCompatActivity() {
         )
 
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                dashboardViewModel.isEngineStarted.collect { isEngineStarted ->
+            dashboardViewModel.isEngineStarted
+                .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
+                .collect { isEngineStarted ->
                     binding.goBreak.apply {
                         isEnabled = isEngineStarted
                         text = getString(R.string.go)
                     }
                 }
-            }
         }
 
         binding.startStop.setOnClickListener {
@@ -145,15 +145,14 @@ class AppActivity : AppCompatActivity() {
         animationStartDelay: Long
     ) {
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                valuesStream.collect { nextValue ->
+            valuesStream.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
+                .collect { nextValue ->
                     meterView.setNeedleValue(
                         progress = nextValue.first,
                         duration = nextValue.second,
                         startDelay = animationStartDelay
                     )
                 }
-            }
         }
     }
 
