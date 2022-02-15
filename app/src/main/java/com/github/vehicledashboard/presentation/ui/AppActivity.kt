@@ -18,8 +18,6 @@ import com.github.vehicledashboard.databinding.AppActivityBinding
 import com.github.vehicledashboard.presentation.models.engineOppositeState
 import com.github.vehicledashboard.presentation.models.vehicleOppositeState
 import com.github.vehicledashboard.presentation.ui.dashboard.DashboardViewModel
-import com.github.vehicledashboard.presentation.ui.dashboard.MeterView
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlin.system.exitProcess
 
@@ -52,14 +50,6 @@ class AppActivity : AppCompatActivity() {
         }
 
         switchVisibility(true)
-        subscribeMeterViewToValuesStream(
-            binding.tachometer,
-            dashboardViewModel.tachometerValues
-        )
-        subscribeMeterViewToValuesStream(
-            binding.speedometer,
-            dashboardViewModel.speedometerValues
-        )
 
         lifecycleScope.launch {
             dashboardViewModel.isEngineStarted
@@ -146,23 +136,6 @@ class AppActivity : AppCompatActivity() {
         } else {
             ELEVATION_ZERO
         }
-
-    private fun subscribeMeterViewToValuesStream(
-        meterView: MeterView,
-        valuesStream: Flow<Pair<Float, Long>>,
-        animationStartDelay: Long = 0L
-    ) {
-        lifecycleScope.launch {
-            valuesStream.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
-                .collect { nextValue ->
-                    meterView.setNeedleValue(
-                        progress = nextValue.first,
-                        duration = nextValue.second,
-                        startDelay = animationStartDelay
-                    )
-                }
-        }
-    }
 
     companion object {
         private const val ELEVATION_ZERO = 0f

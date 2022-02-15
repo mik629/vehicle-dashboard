@@ -11,6 +11,7 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
@@ -23,6 +24,7 @@ import com.github.vehicledashboard.presentation.models.BarLabel
 import com.github.vehicledashboard.presentation.models.MeterType
 import com.github.vehicledashboard.presentation.models.Needle
 import com.github.vehicledashboard.presentation.models.fromId
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -158,10 +160,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         } finally {
             attributes.recycle()
         }
-        init()
-    }
 
-    private fun init() {
         if (!isInEditMode) {
             setLayerType(LAYER_TYPE_HARDWARE, null)
         }
@@ -173,7 +172,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     }
 
     // todo: optimize?
-    fun setNeedleValue(progress: Float, duration: Long, startDelay: Long) {
+    private fun setNeedleValue(progress: Float, duration: Long, startDelay: Long) {
         require(progress >= 0)
         ValueAnimator.ofObject(
             typeEvaluator,
@@ -240,6 +239,33 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                         invalidate()
                     }
             }
+
+        subscribeNeedleValuesStream(
+            lifecycleOwner,
+            when (meterType) {
+                MeterType.SPEEDOMETER -> dashboardViewModel.speedometerValues
+                MeterType.TACHOMETER -> dashboardViewModel.tachometerValues
+                MeterType.UNKNOWN -> throw UnsupportedOperationException()
+            }
+        )
+    }
+
+    private fun subscribeNeedleValuesStream(
+        lifecycleOwner: LifecycleOwner,
+        valuesStream: Flow<Pair<Float, Long>>,
+        animationStartDelay: Long = 0L
+    ) {
+        lifecycleOwner.lifecycleScope
+            .launch {
+                valuesStream.flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+                    .collect { nextValue ->
+                        setNeedleValue(
+                            progress = nextValue.first,
+                            duration = nextValue.second,
+                            startDelay = animationStartDelay
+                        )
+                    }
+            }
     }
 
     // fixme: refactor
@@ -278,8 +304,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     }
 
     override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-
         backgroundPaint.color = if (isEnabled) {
             barBackgroundColor
         } else {
