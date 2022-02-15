@@ -17,13 +17,11 @@ import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.github.vehicledashboard.R
-import com.github.vehicledashboard.domain.calcMajorStepAngle
-import com.github.vehicledashboard.domain.cosInRadians
 import com.github.vehicledashboard.domain.getHalf
 import com.github.vehicledashboard.domain.inBetweenExclusive
-import com.github.vehicledashboard.domain.sinInRadians
 import com.github.vehicledashboard.presentation.models.BarLabel
 import com.github.vehicledashboard.presentation.models.MeterType
+import com.github.vehicledashboard.presentation.models.Needle
 import com.github.vehicledashboard.presentation.models.fromId
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -60,11 +58,17 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             field = value
         }
 
-    private var needleValue: Float = ZERO
+    private var lastNeedleValue: Float = ZERO
         set(value) {
             require(value >= ZERO)
             field = min(barMaxValue, value)
             invalidate()
+        }
+
+    private var needle: Needle? = null
+        set(value) {
+            field = value
+            invalidate() // fixme: extra redraw
         }
 
     private val backgroundPaint: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -90,11 +94,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }
 
     private var barBackgroundColor: Int = 0
-
-    private var majorStepAngle = 0f
-    private var minorTicks = 0
-    private var minorStepAngle = 0f
-    private var halfMinorStepAngle = 0f
 
     private var meterType: MeterType = MeterType.UNKNOWN
 
@@ -146,7 +145,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 R.styleable.MeterView_needleColor,
                 Color.RED // todo: replace with theme attr
             )
-            needleValue = attributes.getFloat(
+            lastNeedleValue = attributes.getFloat(
                 R.styleable.MeterView_needleStartValue,
                 ZERO
             )
@@ -171,12 +170,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         arcPaint.strokeWidth = ARC_STROKE_WIDTH
         ticksPaint.strokeWidth = TICK_STROKE_WIDTH
         needlePaint.strokeWidth = NEEDLE_STROKE_WIDTH
-
-        majorStepAngle =
-            calcMajorStepAngle(step = majorTickStep, angle = ARC_END_ANGLE, maxVal = barMaxValue)
-        minorTicks = (majorTickStep / minorTickStep).toInt()
-        minorStepAngle = majorStepAngle / minorTicks
-        halfMinorStepAngle = getHalf(minorStepAngle)
     }
 
     // todo: optimize?
@@ -184,7 +177,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         require(progress >= 0)
         ValueAnimator.ofObject(
             typeEvaluator,
-            needleValue,
+            lastNeedleValue,
             min(progress, barMaxValue)
         ).apply {
             this.duration = duration
@@ -192,7 +185,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             this.addUpdateListener { animation ->
                 val value = animation.animatedValue as? Float
                 if (value != null) {
-                    needleValue = value
+                    lastNeedleValue = value
                 }
             }
         }.also { va ->
@@ -229,6 +222,21 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                     .flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
                     .collect { bars ->
                         barLabels = bars
+                        invalidate()
+                    }
+            }
+
+        lifecycleOwner
+            .lifecycleScope
+            .launch {
+                when (meterType) {
+                    MeterType.SPEEDOMETER -> dashboardViewModel.speedometerNeedle
+                    MeterType.TACHOMETER -> dashboardViewModel.tachometerNeedle
+                    MeterType.UNKNOWN -> throw UnsupportedOperationException()
+                }
+                    .flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+                    .collect { aNeedle ->
+                        needle = aNeedle
                         invalidate()
                     }
             }
@@ -354,21 +362,26 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         viewWidth: Float,
         center: Float
     ) {
-        val radius = viewWidth * NEEDLE_RADIUS_COEFFICIENT
-        val smallOval = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
-        val majorStepAngle = ARC_END_ANGLE / barMaxValue
-        val angle = BAR_START_ANGLE + needleValue * majorStepAngle
-        val ovalMiddle = getHalf(smallOval.width())
-        val cosOfAngle = cosInRadians(angle)
-        val sinOfAngle = sinInRadians(angle)
-        canvas.drawLine(
-            centerX + cosOfAngle * ovalMiddle,
-            centerY - sinOfAngle * ovalMiddle,
-            centerX + cosOfAngle * radius,
-            centerY - sinOfAngle * radius,
-            needlePaint
+        val smallCircle = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
+        needle?.let { aNeedle ->
+            canvas.drawLine(
+                aNeedle.startX,
+                aNeedle.startY,
+                aNeedle.stopX,
+                aNeedle.stopY,
+                needlePaint
+            )
+            canvas.drawCircle(center, center, aNeedle.circleCenter, ticksPaint)
+        }
+        dashboardViewModel.buildNeedle(
+            meterType,
+            viewWidth = viewWidth,
+            needleBaseCircleDiameter = smallCircle.width(),
+            barMaxValue = barMaxValue,
+            needleValue = lastNeedleValue,
+            centerX = centerX,
+            centerY = centerY
         )
-        canvas.drawCircle(center, center, ovalMiddle, ticksPaint)
     }
 
     private fun getOval(canvas: Canvas, factor: Float = FACTOR_FULL): RectF {
@@ -395,7 +408,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         private const val TICK_STROKE_WIDTH = 3f
         private const val DEFAULT_MAJOR_TICK_LENGTH = 32f
 
-        const val BAR_START_ANGLE = -40f
         private const val ARC_START_ANGLE = 140f
         const val ARC_END_ANGLE = 260f
 
@@ -403,7 +415,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
         private const val BAR_TEXT_ROTATION = 90f
 
-        private const val NEEDLE_RADIUS_COEFFICIENT = 0.38f
         private const val NEEDLE_CIRCLE_RADIUS_COEFFICIENT = 0.2f
         const val TICKS_RADIUS_COEFFICIENT = 0.48f
     }

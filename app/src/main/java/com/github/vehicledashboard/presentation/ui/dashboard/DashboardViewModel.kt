@@ -9,6 +9,7 @@ import com.github.vehicledashboard.domain.getHalf
 import com.github.vehicledashboard.domain.sinInRadians
 import com.github.vehicledashboard.presentation.models.BarLabel
 import com.github.vehicledashboard.presentation.models.MeterType
+import com.github.vehicledashboard.presentation.models.Needle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -48,12 +49,21 @@ class DashboardViewModel : ViewModel() {
         MutableStateFlow(SPEEDOMETER_START_VALUE to 0)
     val speedometerValues: Flow<Pair<Float, Long>> = _speedometerValues
 
+    private val _speedometerNeedle: MutableSharedFlow<Needle?> = MutableStateFlow(null)
+    val speedometerNeedle: Flow<Needle?> =
+        _speedometerNeedle
+    private val _tachometerNeedle: MutableSharedFlow<Needle?> = MutableStateFlow(null)
+    val tachometerNeedle: Flow<Needle?> =
+        _tachometerNeedle
+
     private var tachometerJob: Job? = null
     private var speedometerJob: Job? = null
     private var speedometerTicksJob: Job? = null
     private var tachometerTicksJob: Job? = null
     private var speedometerBarLabelsJob: Job? = null
     private var tachometerBarLabelsJob: Job? = null
+    private var speedometerNeedleJob: Job? = null
+    private var tachometerNeedleJob: Job? = null
 
     fun onEngineStartStopClick(start: Boolean) {
         if (start) {
@@ -284,7 +294,7 @@ class DashboardViewModel : ViewModel() {
         val radius = viewWidth * MeterView.TICKS_RADIUS_COEFFICIENT
         var curProgress = 0f
 
-        var currentAngle = MeterView.BAR_START_ANGLE
+        var currentAngle = BAR_START_ANGLE
         val endAngle = MeterView.ARC_END_ANGLE + currentAngle
 
         val minorTickLength = getHalf(majorTickLength)
@@ -368,7 +378,7 @@ class DashboardViewModel : ViewModel() {
             )
 
         var curProgress = 0f
-        var currentAngle = MeterView.BAR_START_ANGLE
+        var currentAngle = BAR_START_ANGLE
         val endAngle = MeterView.ARC_END_ANGLE + currentAngle
         val barLabels = mutableListOf<BarLabel>()
         while (currentAngle <= endAngle) {
@@ -389,7 +399,77 @@ class DashboardViewModel : ViewModel() {
             ""
         }
 
+    fun buildNeedle(
+        meterType: MeterType,
+        viewWidth: Float,
+        needleBaseCircleDiameter: Float,
+        barMaxValue: Float,
+        needleValue: Float,
+        centerX: Float,
+        centerY: Float
+    ) {
+        when (meterType) {
+            MeterType.SPEEDOMETER -> {
+                speedometerNeedleJob?.cancel()
+                speedometerNeedleJob = viewModelScope.launch(Dispatchers.Default) {
+                    buildNeedle(
+                        _speedometerNeedle,
+                        viewWidth = viewWidth,
+                        circleDiameter = needleBaseCircleDiameter,
+                        barMaxValue = barMaxValue,
+                        needleValue = needleValue,
+                        centerX = centerX,
+                        centerY = centerY
+                    )
+                }
+            }
+            MeterType.TACHOMETER -> {
+                tachometerNeedleJob?.cancel()
+                tachometerNeedleJob = viewModelScope.launch(Dispatchers.Default) {
+                    buildNeedle(
+                        _tachometerNeedle,
+                        viewWidth = viewWidth,
+                        circleDiameter = needleBaseCircleDiameter,
+                        barMaxValue = barMaxValue,
+                        needleValue = needleValue,
+                        centerX = centerX,
+                        centerY = centerY
+                    )
+                }
+            }
+            MeterType.UNKNOWN -> throw UnsupportedOperationException()
+        }
+    }
+
+    private suspend fun buildNeedle(
+        flow: MutableSharedFlow<Needle?>,
+        viewWidth: Float,
+        circleDiameter: Float,
+        barMaxValue: Float,
+        needleValue: Float,
+        centerX: Float,
+        centerY: Float
+    ) {
+        val radius = viewWidth * NEEDLE_RADIUS_COEFFICIENT
+        val majorStepAngle = MeterView.ARC_END_ANGLE / barMaxValue
+        val angle = BAR_START_ANGLE + needleValue * majorStepAngle
+        val circleCenter = getHalf(circleDiameter)
+        val cosOfAngle = cosInRadians(angle)
+        val sinOfAngle = sinInRadians(angle)
+        flow.emit(
+            Needle(
+                startX = centerX + cosOfAngle * circleCenter,
+                startY = centerY - sinOfAngle * circleCenter,
+                stopX = centerX + cosOfAngle * radius,
+                stopY = centerY - sinOfAngle * radius,
+                circleCenter = circleCenter
+            )
+        )
+    }
+
     companion object {
+        private const val NEEDLE_RADIUS_COEFFICIENT = 0.38f
+
         private const val SPEEDOMETER_START_VALUE = 0f
         private const val SPEEDOMETER_STEP = 5f
 
@@ -398,6 +478,7 @@ class DashboardViewModel : ViewModel() {
         private const val TACHOMETER_STEP = 0.2f
 
         private const val BAR_DIGIT_FORMAT = "%.0f"
+        private const val BAR_START_ANGLE = -40f
 
         suspend fun generateNextValues(
             flow: MutableSharedFlow<Pair<Float, Long>>,
