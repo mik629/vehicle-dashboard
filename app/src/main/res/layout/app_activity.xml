@@ -22,7 +22,7 @@
         app:needleStartValue="0.8" />
 
     <Button
-        android:id="@+id/start_stop"
+        android:id="@+id/button_start_stop"
         style="?attr/borderlessButtonStyle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -48,7 +48,7 @@
         app:meterType="SPEEDOMETER" />
 
     <Button
-        android:id="@+id/go_break"
+        android:id="@+id/button_go_break"
         style="?attr/borderlessButtonStyle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -59,5 +59,15 @@
         app:layout_constraintBottom_toBottomOf="@id/speedometer"
         app:layout_constraintEnd_toEndOf="@id/speedometer"
         app:layout_constraintStart_toStartOf="@id/speedometer" />
+
+    <ImageButton
+        android:id="@+id/button_close"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:backgroundTint="@android:color/transparent"
+        android:padding="@dimen/margin_standard"
+        android:src="@drawable/ic_close"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

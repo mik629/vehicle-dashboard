@@ -9,6 +9,7 @@
     <color name="red_500">#F44336</color>
     <color name="grey_500">#9E9E9E</color>
     <color name="black">#FF000000</color>
+    <color name="symbol_color_primary">#FFFFFF</color>
     <color name="white">#FFFFFFFF</color>
     <color name="light_blue_500">#03A9F4</color>
     <color name="light_blue_600">#FF039BE5</color>

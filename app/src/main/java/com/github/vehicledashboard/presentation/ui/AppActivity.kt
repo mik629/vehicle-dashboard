@@ -21,6 +21,7 @@ import com.github.vehicledashboard.presentation.ui.dashboard.DashboardViewModel
 import com.github.vehicledashboard.presentation.ui.dashboard.MeterView
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlin.system.exitProcess
 
 class AppActivity : AppCompatActivity() {
 
@@ -64,32 +65,36 @@ class AppActivity : AppCompatActivity() {
             dashboardViewModel.isEngineStarted
                 .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
                 .collect { isEngineStarted ->
-                    binding.goBreak.apply {
+                    binding.buttonGoBreak.apply {
                         isEnabled = isEngineStarted
                         text = getString(R.string.go)
                     }
                 }
         }
 
-        binding.startStop.setOnClickListener {
-            val start = binding.startStop.text == getString(R.string.start)
+        binding.buttonStartStop.setOnClickListener {
+            val start = binding.buttonStartStop.text == getString(R.string.start)
             val engineOppositeState = engineOppositeState(start)
             dashboardViewModel.onEngineStartStopClick(start)
             fillButton(
-                binding.startStop,
+                binding.buttonStartStop,
                 getString(engineOppositeState.stringId),
                 engineOppositeState.colorId
             )
         }
-        binding.goBreak.setOnClickListener {
-            val go = binding.goBreak.text == getString(R.string.go)
+        binding.buttonGoBreak.setOnClickListener {
+            val go = binding.buttonGoBreak.text == getString(R.string.go)
             dashboardViewModel.onGoBreakClick(go)
             val vehicleOppositeState = vehicleOppositeState(go)
             fillButton(
-                binding.goBreak,
+                binding.buttonGoBreak,
                 getString(vehicleOppositeState.stringId),
                 vehicleOppositeState.colorId
             )
+        }
+        binding.buttonClose.setOnClickListener {
+            finish()
+            exitProcess(0)
         }
     }
 
