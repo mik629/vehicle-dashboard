@@ -5,7 +5,9 @@ import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
+import android.widget.Button
 import androidx.activity.viewModels
+import androidx.annotation.ColorRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -51,13 +53,11 @@ class AppActivity : AppCompatActivity() {
         switchVisibility(true)
         subscribeMeterViewToValuesStream(
             binding.tachometer,
-            dashboardViewModel.tachometerValues,
-            animationStartDelay = 0L
+            dashboardViewModel.tachometerValues
         )
         subscribeMeterViewToValuesStream(
             binding.speedometer,
-            dashboardViewModel.speedometerValues,
-            animationStartDelay = 0L
+            dashboardViewModel.speedometerValues
         )
 
         lifecycleScope.launch {
@@ -75,30 +75,33 @@ class AppActivity : AppCompatActivity() {
             val start = binding.startStop.text == getString(R.string.start)
             val engineOppositeState = engineOppositeState(start)
             dashboardViewModel.onEngineStartStopClick(start)
-            binding.startStop.apply {
-                text = getString(engineOppositeState.stringId)
-                setTextColor(
-                    ContextCompat.getColor(
-                        context,
-                        engineOppositeState.colorId
-                    )
-                )
-            }
+            fillButton(
+                binding.startStop,
+                getString(engineOppositeState.stringId),
+                engineOppositeState.colorId
+            )
         }
         binding.goBreak.setOnClickListener {
             val go = binding.goBreak.text == getString(R.string.go)
             dashboardViewModel.onGoBreakClick(go)
             val vehicleOppositeState = vehicleOppositeState(go)
-            binding.goBreak.apply {
-                text = getString(vehicleOppositeState.stringId)
-                setTextColor(
-                    ContextCompat.getColor(
-                        context,
-                        vehicleOppositeState.colorId
-                    )
-                )
-            }
+            fillButton(
+                binding.goBreak,
+                getString(vehicleOppositeState.stringId),
+                vehicleOppositeState.colorId
+            )
+        }
+    }
 
+    private fun fillButton(button: Button, buttonText: String, @ColorRes colorId: Int) {
+        button.apply {
+            text = buttonText
+            setTextColor(
+                ContextCompat.getColor(
+                    context,
+                    colorId
+                )
+            )
         }
     }
 
@@ -110,7 +113,8 @@ class AppActivity : AppCompatActivity() {
             }
             MotionEvent.ACTION_MOVE -> {
                 if (event.pointerCount == COUNT_TWO_FINGERS) {
-                    switchVisibility(event.x - firstTouchX > 0)
+                    val movedRight = event.x - firstTouchX > 0
+                    switchVisibility(movedRight)
                     true
                 } else {
                     false
@@ -123,26 +127,25 @@ class AppActivity : AppCompatActivity() {
     private fun switchVisibility(isVisible: Boolean) {
         binding.tachometer.apply {
             this.isEnabled = isVisible
-            this.elevation = if (isVisible) {
-                ELEVATION_DEFAULT
-            } else {
-                ELEVATION_ZERO
-            }
+            this.elevation = getElevation(isVisible)
         }
         binding.speedometer.apply {
             this.isEnabled = !isVisible
-            this.elevation = if (!isVisible) {
-                ELEVATION_DEFAULT
-            } else {
-                ELEVATION_ZERO
-            }
+            this.elevation = getElevation(!isVisible)
         }
     }
+
+    private fun getElevation(isVisible: Boolean) =
+        if (isVisible) {
+            ELEVATION_DEFAULT
+        } else {
+            ELEVATION_ZERO
+        }
 
     private fun subscribeMeterViewToValuesStream(
         meterView: MeterView,
         valuesStream: Flow<Pair<Float, Long>>,
-        animationStartDelay: Long
+        animationStartDelay: Long = 0L
     ) {
         lifecycleScope.launch {
             valuesStream.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
