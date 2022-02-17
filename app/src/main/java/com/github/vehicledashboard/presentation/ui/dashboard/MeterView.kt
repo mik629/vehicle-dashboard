@@ -12,12 +12,11 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
-import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.github.vehicledashboard.R
 import com.github.vehicledashboard.domain.getHalf
 import com.github.vehicledashboard.domain.inBetweenExclusive
@@ -174,6 +173,64 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         needlePaint.strokeWidth = NEEDLE_STROKE_WIDTH
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        val lifecycleOwner = requireNotNull(findViewTreeLifecycleOwner())
+        lifecycleOwner
+            .lifecycleScope
+            .launch {
+                lifecycleOwner.lifecycle
+                    .repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        launch {
+                            chooseFlow(
+                                speedometerFlow = dashboardViewModel.speedometerTicks,
+                                tachometerFlow = dashboardViewModel.tachometerTicks
+                            ).collect { ticks ->
+                                tickLines = ticks
+                                invalidate()
+                            }
+                        }
+                        launch {
+                            chooseFlow(
+                                speedometerFlow = dashboardViewModel.speedometerBarLabels,
+                                tachometerFlow = dashboardViewModel.tachometerBarLabels
+                            ).collect { bars ->
+                                barLabels = bars
+                                invalidate()
+                            }
+                        }
+                        launch {
+                            chooseFlow(
+                                speedometerFlow = dashboardViewModel.speedometerNeedle,
+                                tachometerFlow = dashboardViewModel.tachometerNeedle
+                            ).collect { aNeedle ->
+                                needle = aNeedle
+                                invalidate()
+                            }
+                        }
+                        launch {
+                            chooseFlow(
+                                speedometerFlow = dashboardViewModel.speedometerValues,
+                                tachometerFlow = dashboardViewModel.tachometerValues
+                            ).collect { nextValue ->
+                                setNeedleValue(
+                                    progress = nextValue.first,
+                                    duration = nextValue.second,
+                                    startDelay = 0L
+                                )
+                            }
+                        }
+                    }
+            }
+    }
+
+    private fun <T> chooseFlow(speedometerFlow: Flow<T>, tachometerFlow: Flow<T>): Flow<T> =
+        when (meterType) {
+            MeterType.SPEEDOMETER -> speedometerFlow
+            MeterType.TACHOMETER -> tachometerFlow
+            MeterType.UNKNOWN -> throw UnsupportedOperationException()
+        }
+
     // todo: optimize?
     private fun setNeedleValue(progress: Float, duration: Long, startDelay: Long) {
         require(progress >= 0)
@@ -195,82 +252,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        val lifecycleOwner = requireNotNull(findViewTreeLifecycleOwner())
-        lifecycleOwner
-            .lifecycleScope
-            .launch {
-                when (meterType) {
-                    MeterType.SPEEDOMETER -> dashboardViewModel.speedometerTicks
-                    MeterType.TACHOMETER -> dashboardViewModel.tachometerTicks
-                    MeterType.UNKNOWN -> throw UnsupportedOperationException()
-                }
-                    .flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
-                    .collect { ticks ->
-                        tickLines = ticks
-                        invalidate()
-                    }
-            }
-
-        lifecycleOwner
-            .lifecycleScope
-            .launch {
-                when (meterType) {
-                    MeterType.SPEEDOMETER -> dashboardViewModel.speedometerBarLabels
-                    MeterType.TACHOMETER -> dashboardViewModel.tachometerBarLabels
-                    MeterType.UNKNOWN -> throw UnsupportedOperationException()
-                }
-                    .flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
-                    .collect { bars ->
-                        barLabels = bars
-                        invalidate()
-                    }
-            }
-
-        lifecycleOwner
-            .lifecycleScope
-            .launch {
-                when (meterType) {
-                    MeterType.SPEEDOMETER -> dashboardViewModel.speedometerNeedle
-                    MeterType.TACHOMETER -> dashboardViewModel.tachometerNeedle
-                    MeterType.UNKNOWN -> throw UnsupportedOperationException()
-                }
-                    .flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
-                    .collect { aNeedle ->
-                        needle = aNeedle
-                        invalidate()
-                    }
-            }
-
-        subscribeNeedleValuesStream(
-            lifecycleOwner,
-            when (meterType) {
-                MeterType.SPEEDOMETER -> dashboardViewModel.speedometerValues
-                MeterType.TACHOMETER -> dashboardViewModel.tachometerValues
-                MeterType.UNKNOWN -> throw UnsupportedOperationException()
-            }
-        )
-    }
-
-    private fun subscribeNeedleValuesStream(
-        lifecycleOwner: LifecycleOwner,
-        valuesStream: Flow<Pair<Float, Long>>,
-        animationStartDelay: Long = 0L
-    ) {
-        lifecycleOwner.lifecycleScope
-            .launch {
-                valuesStream.flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
-                    .collect { nextValue ->
-                        setNeedleValue(
-                            progress = nextValue.first,
-                            duration = nextValue.second,
-                            startDelay = animationStartDelay
-                        )
-                    }
-            }
-    }
-
     override fun onConfigurationChanged(newConfig: Configuration?) {
         super.onConfigurationChanged(newConfig)
         newConfig?.let { config ->
@@ -279,8 +260,10 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         tickLines = floatArrayOf()
     }
 
+    private var i = 0
     // fixme: Janky frames: 59 (5.80%)
     override fun onDraw(canvas: Canvas) {
+        println("onDraw called ${i++}-th time")
         backgroundPaint.color = if (isEnabled) {
             barBackgroundColor
         } else {
@@ -359,7 +342,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         centerY: Float,
         viewWidth: Float
     ) {
-        val smallCircle = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
         needle?.let { aNeedle ->
             canvas.drawLine(
                 aNeedle.startX,
@@ -370,6 +352,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             )
             canvas.drawCircle(centerX, centerY, aNeedle.circleCenter, ticksPaint)
         }
+        val smallCircle = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
         dashboardViewModel.buildNeedle(
             meterType,
             viewWidth = viewWidth,
