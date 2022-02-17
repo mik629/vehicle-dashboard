@@ -3,6 +3,7 @@ package com.github.vehicledashboard.presentation.ui.dashboard
 import android.animation.TypeEvaluator
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -98,6 +99,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
     private var barBackgroundColor: Int = 0
 
     private var meterType: MeterType = MeterType.UNKNOWN
+
+    private var screenOrientation: Int = Configuration.ORIENTATION_PORTRAIT
 
     private var tickLines: FloatArray = floatArrayOf()
     private var barLabels: List<BarLabel> = listOf()
@@ -268,41 +271,15 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             }
     }
 
-    // fixme: refactor
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val widthMode = MeasureSpec.getMode(widthMeasureSpec)
-        val widthSize = MeasureSpec.getSize(widthMeasureSpec)
-        val heightMode = MeasureSpec.getMode(heightMeasureSpec)
-        val heightSize = MeasureSpec.getSize(heightMeasureSpec)
-        var width: Int
-        var height: Int
-
-        width = if (widthMode == MeasureSpec.EXACTLY || widthMode == MeasureSpec.AT_MOST) {
-            widthSize
-        } else {
-            -1
+    override fun onConfigurationChanged(newConfig: Configuration?) {
+        super.onConfigurationChanged(newConfig)
+        newConfig?.let { config ->
+            screenOrientation = config.orientation
         }
-
-        height = if (heightMode == MeasureSpec.EXACTLY || heightMode == MeasureSpec.AT_MOST) {
-            heightSize
-        } else {
-            -1
-        }
-        if (height >= 0 && width >= 0) {
-            width = min(height, width)
-            height = width / 2
-        } else if (width >= 0) {
-            height = width / 2
-        } else if (height >= 0) {
-            width = height * 2
-        } else {
-            width = 0
-            height = 0
-        }
-
-        setMeasuredDimension(width, height)
+        tickLines = floatArrayOf()
     }
 
+    // fixme: Janky frames: 59 (5.80%)
     override fun onDraw(canvas: Canvas) {
         backgroundPaint.color = if (isEnabled) {
             barBackgroundColor
@@ -311,25 +288,23 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }
 
         val oval = getOval(canvas)
-        val center = getHalf(min(width, height).toFloat())
-        drawBackground(canvas, center)
-        drawArc(canvas, oval)
-
         val centerX = oval.centerX()
         val centerY = oval.centerY()
         val viewWidth = oval.width()
+
+        drawBackground(canvas, centerX, centerY)
+        drawArc(canvas, oval)
         drawTicks(canvas, centerX = centerX, centerY = centerY, viewWidth = viewWidth)
         drawNeedle(
             canvas,
             centerX = centerX,
             centerY = centerY,
-            viewWidth = viewWidth,
-            center = center
+            viewWidth = viewWidth
         )
     }
 
-    private fun drawBackground(canvas: Canvas, center: Float) {
-        canvas.drawCircle(center, center, center, backgroundPaint)
+    private fun drawBackground(canvas: Canvas, centerX: Float, centerY: Float) {
+        canvas.drawCircle(centerX, centerY, min(centerX, centerY), backgroundPaint)
     }
 
     private fun drawArc(canvas: Canvas, oval: RectF) {
@@ -378,13 +353,11 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }
     }
 
-    // fixme: move calculations away from UI thread
     private fun drawNeedle(
         canvas: Canvas,
         centerX: Float,
         centerY: Float,
-        viewWidth: Float,
-        center: Float
+        viewWidth: Float
     ) {
         val smallCircle = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
         needle?.let { aNeedle ->
@@ -395,7 +368,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 aNeedle.stopY,
                 needlePaint
             )
-            canvas.drawCircle(center, center, aNeedle.circleCenter, ticksPaint)
+            canvas.drawCircle(centerX, centerY, aNeedle.circleCenter, ticksPaint)
         }
         dashboardViewModel.buildNeedle(
             meterType,
@@ -412,11 +385,23 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         val canvasWidth = canvas.width - paddingLeft - paddingRight
         val canvasHeight = canvas.height - paddingTop - paddingBottom
         val smallest = min(canvasWidth, canvasHeight)
+        val startX =
+            if (meterType == MeterType.SPEEDOMETER && screenOrientation != Configuration.ORIENTATION_PORTRAIT) {
+                smallest
+            } else {
+                0
+            }
+        val startY =
+            if (meterType == MeterType.SPEEDOMETER && screenOrientation == Configuration.ORIENTATION_PORTRAIT) {
+                smallest
+            } else {
+                0
+            }
         return RectF(
-            paddingLeft.toFloat(),
-            paddingTop.toFloat(),
-            smallest * factor + paddingRight,
-            smallest * factor + paddingBottom
+            startX + paddingLeft.toFloat(),
+            startY + paddingTop.toFloat(),
+            startX + smallest * factor + paddingRight,
+            startY + smallest * factor + paddingBottom
         )
     }
 

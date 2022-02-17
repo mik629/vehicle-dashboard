@@ -5,4 +5,6 @@
     <string name="stop">stop</string>
     <string name="go">go</string>
     <string name="break_">break</string>
+
+    <string name="content_desc_close_btn">Close button</string>
 </resources>

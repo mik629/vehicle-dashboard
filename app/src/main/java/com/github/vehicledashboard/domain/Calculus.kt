@@ -23,3 +23,6 @@ fun inBetweenExclusive(value: Float, start: Float, end: Float): Boolean =
 
 fun getHalf(value: Float) =
     value / 2
+
+fun getHalf(value: Int) =
+    value / 2
