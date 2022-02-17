@@ -5,5 +5,5 @@ data class Needle(
     val startY: Float,
     val stopX: Float,
     val stopY: Float,
-    val circleCenter: Float
+    val circleRadius: Float
 )

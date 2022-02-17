@@ -21,6 +21,7 @@ import com.github.vehicledashboard.R
 import com.github.vehicledashboard.domain.getHalf
 import com.github.vehicledashboard.domain.inBetweenExclusive
 import com.github.vehicledashboard.presentation.models.BarLabel
+import com.github.vehicledashboard.presentation.models.Meter
 import com.github.vehicledashboard.presentation.models.MeterType
 import com.github.vehicledashboard.presentation.models.Needle
 import com.github.vehicledashboard.presentation.models.fromId
@@ -46,6 +47,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             field = value
         }
 
+    private var barBackgroundColor: Int = 0
+
     private var barValuePadding = 0f
 
     private var majorTickStep = UNSPECIFIED
@@ -58,6 +61,14 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         set(value) {
             require(inBetweenExclusive(value = value, start = ZERO, end = barMaxValue))
             field = value
+        }
+
+    private var meterType: MeterType = MeterType.UNKNOWN
+
+    private var meter: Meter? = null
+        set(value) {
+            field = value
+            invalidate()
         }
 
     private var lastNeedleValue: Float = ZERO
@@ -95,14 +106,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             style = Paint.Style.STROKE
         }
 
-    private var barBackgroundColor: Int = 0
-
-    private var meterType: MeterType = MeterType.UNKNOWN
-
     private var screenOrientation: Int = Configuration.ORIENTATION_PORTRAIT
-
-    private var tickLines: FloatArray = floatArrayOf()
-    private var barLabels: List<BarLabel> = listOf()
 
     init {
         val density = resources.displayMetrics.density
@@ -183,20 +187,10 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                     .repeatOnLifecycle(Lifecycle.State.STARTED) {
                         launch {
                             chooseFlow(
-                                speedometerFlow = dashboardViewModel.speedometerTicks,
-                                tachometerFlow = dashboardViewModel.tachometerTicks
-                            ).collect { ticks ->
-                                tickLines = ticks
-                                invalidate()
-                            }
-                        }
-                        launch {
-                            chooseFlow(
-                                speedometerFlow = dashboardViewModel.speedometerBarLabels,
-                                tachometerFlow = dashboardViewModel.tachometerBarLabels
-                            ).collect { bars ->
-                                barLabels = bars
-                                invalidate()
+                                speedometerFlow = dashboardViewModel.speedometer,
+                                tachometerFlow = dashboardViewModel.tachometer
+                            ).collect { meterData ->
+                                meter = meterData
                             }
                         }
                         launch {
@@ -205,7 +199,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                                 tachometerFlow = dashboardViewModel.tachometerNeedle
                             ).collect { aNeedle ->
                                 needle = aNeedle
-                                invalidate()
                             }
                         }
                         launch {
@@ -257,11 +250,11 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         newConfig?.let { config ->
             screenOrientation = config.orientation
         }
-        tickLines = floatArrayOf()
+        meter = null
     }
 
     private var i = 0
-    // fixme: Janky frames: 59 (5.80%)
+
     override fun onDraw(canvas: Canvas) {
         println("onDraw called ${i++}-th time")
         backgroundPaint.color = if (isEnabled) {
@@ -270,74 +263,86 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             Color.GRAY
         }
 
-        val oval = getOval(canvas)
-        val centerX = oval.centerX()
-        val centerY = oval.centerY()
-        val viewWidth = oval.width()
+        if (meter == null) {
+            dashboardViewModel.buildMeter(
+                meterType = meterType,
+                screenOrientation = screenOrientation,
+                canvasWidth = width,
+                canvasHeight = height,
+                paddingLeft = paddingLeft,
+                paddingRight = paddingRight,
+                paddingTop = paddingTop,
+                paddingBottom = paddingBottom,
+                majorTickLength = DEFAULT_MAJOR_TICK_LENGTH,
+                majorTickStep = majorTickStep,
+                minorTickStep = minorTickStep,
+                barMaxValue = barMaxValue
+            )
+        }
 
-        drawBackground(canvas, centerX, centerY)
-        drawArc(canvas, oval)
-        drawTicks(canvas, centerX = centerX, centerY = centerY, viewWidth = viewWidth)
-        drawNeedle(
-            canvas,
-            centerX = centerX,
-            centerY = centerY,
-            viewWidth = viewWidth
-        )
+        meter?.let { meter ->
+            val centerX = meter.borderBox.centerX()
+            val centerY = meter.borderBox.centerY()
+            val viewWidth = meter.borderBox.width()
+
+            drawBackground(canvas, centerX, centerY)
+            drawArc(canvas, meter.borderBox)
+            drawTicks(
+                canvas = canvas,
+                barLabels = meter.barLabels,
+                tickLines = meter.ticks,
+                centerX = centerX,
+                centerY = centerY,
+                viewWidth = viewWidth
+            )
+            drawNeedle(
+                canvas = canvas,
+                circleDiameter = meter.needleCircleBox.width(),
+                centerX = centerX,
+                centerY = centerY,
+                viewWidth = viewWidth
+            )
+        }
     }
 
     private fun drawBackground(canvas: Canvas, centerX: Float, centerY: Float) {
         canvas.drawCircle(centerX, centerY, min(centerX, centerY), backgroundPaint)
     }
 
-    private fun drawArc(canvas: Canvas, oval: RectF) {
-        canvas.drawArc(oval, ARC_START_ANGLE, ARC_END_ANGLE, false, arcPaint)
+    private fun drawArc(canvas: Canvas, borderBox: RectF) {
+        canvas.drawArc(borderBox, ARC_START_ANGLE, ARC_END_ANGLE, false, arcPaint)
     }
 
-    private fun drawTicks(canvas: Canvas, centerX: Float, centerY: Float, viewWidth: Float) {
-        if (barLabels.isEmpty()) {
-            dashboardViewModel.buildBarLabels(
-                majorTickStep = majorTickStep,
-                barMaxValue = barMaxValue,
-                meterType = meterType
-            )
-        } else {
-            val radius = viewWidth * TICKS_RADIUS_COEFFICIENT
-            val txtX = centerX + radius - getHalf(DEFAULT_MAJOR_TICK_LENGTH) - barValuePadding
-            val txtY = centerY + barValuePadding
+    private fun drawTicks(
+        canvas: Canvas,
+        barLabels: List<BarLabel>,
+        tickLines: FloatArray,
+        centerX: Float,
+        centerY: Float,
+        viewWidth: Float
+    ) {
+        val radius = viewWidth * TICKS_RADIUS_COEFFICIENT
+        val txtX = centerX + radius - getHalf(DEFAULT_MAJOR_TICK_LENGTH) - barValuePadding
+        val txtY = centerY + barValuePadding
 
-            for (barLabel in barLabels) {
-                canvas.save()
-                canvas.rotate(barLabel.rotationAngle, centerX, centerY)
-                canvas.rotate(BAR_TEXT_ROTATION, txtX, centerY)
-                canvas.drawText(
-                    barLabel.label,
-                    txtX,
-                    txtY,
-                    txtPaint
-                )
-                canvas.restore()
-            }
-        }
-
-        if (tickLines.isEmpty()) {
-            dashboardViewModel.buildTicks(
-                viewWidth = viewWidth,
-                centerX = centerX,
-                centerY = centerY,
-                majorTickLength = DEFAULT_MAJOR_TICK_LENGTH,
-                majorTickStep = majorTickStep,
-                minorTickStep = minorTickStep,
-                barMaxValue = barMaxValue,
-                meterType = meterType
+        for (barLabel in barLabels) {
+            canvas.save()
+            canvas.rotate(barLabel.rotationAngle, centerX, centerY)
+            canvas.rotate(BAR_TEXT_ROTATION, txtX, centerY)
+            canvas.drawText(
+                barLabel.label,
+                txtX,
+                txtY,
+                txtPaint
             )
-        } else {
-            canvas.drawLines(tickLines, ticksPaint)
+            canvas.restore()
         }
+        canvas.drawLines(tickLines, ticksPaint)
     }
 
     private fun drawNeedle(
         canvas: Canvas,
+        circleDiameter: Float,
         centerX: Float,
         centerY: Float,
         viewWidth: Float
@@ -350,41 +355,17 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 aNeedle.stopY,
                 needlePaint
             )
-            canvas.drawCircle(centerX, centerY, aNeedle.circleCenter, ticksPaint)
+            canvas.drawCircle(centerX, centerY, aNeedle.circleRadius, ticksPaint)
         }
-        val smallCircle = getOval(canvas, NEEDLE_CIRCLE_RADIUS_COEFFICIENT)
+
         dashboardViewModel.buildNeedle(
             meterType,
             viewWidth = viewWidth,
-            needleBaseCircleDiameter = smallCircle.width(),
+            needleBaseCircleDiameter = circleDiameter,
             barMaxValue = barMaxValue,
             needleValue = lastNeedleValue,
             centerX = centerX,
             centerY = centerY
-        )
-    }
-
-    private fun getOval(canvas: Canvas, factor: Float = FACTOR_FULL): RectF {
-        val canvasWidth = canvas.width - paddingLeft - paddingRight
-        val canvasHeight = canvas.height - paddingTop - paddingBottom
-        val smallest = min(canvasWidth, canvasHeight)
-        val startX =
-            if (meterType == MeterType.SPEEDOMETER && screenOrientation != Configuration.ORIENTATION_PORTRAIT) {
-                smallest
-            } else {
-                0
-            }
-        val startY =
-            if (meterType == MeterType.SPEEDOMETER && screenOrientation == Configuration.ORIENTATION_PORTRAIT) {
-                smallest
-            } else {
-                0
-            }
-        return RectF(
-            startX + paddingLeft.toFloat(),
-            startY + paddingTop.toFloat(),
-            startX + smallest * factor + paddingRight,
-            startY + smallest * factor + paddingBottom
         )
     }
 
@@ -403,11 +384,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         private const val ARC_START_ANGLE = 140f
         const val ARC_END_ANGLE = 260f
 
-        private const val FACTOR_FULL = 1f
-
         private const val BAR_TEXT_ROTATION = 90f
 
-        private const val NEEDLE_CIRCLE_RADIUS_COEFFICIENT = 0.2f
         const val TICKS_RADIUS_COEFFICIENT = 0.48f
     }
 }

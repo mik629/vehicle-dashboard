@@ -1,5 +1,7 @@
 package com.github.vehicledashboard.presentation.ui.dashboard
 
+import android.content.res.Configuration
+import android.graphics.RectF
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.vehicledashboard.domain.PI_IN_DEGREES
@@ -8,6 +10,7 @@ import com.github.vehicledashboard.domain.cosInRadians
 import com.github.vehicledashboard.domain.getHalf
 import com.github.vehicledashboard.domain.sinInRadians
 import com.github.vehicledashboard.presentation.models.BarLabel
+import com.github.vehicledashboard.presentation.models.Meter
 import com.github.vehicledashboard.presentation.models.MeterType
 import com.github.vehicledashboard.presentation.models.Needle
 import kotlinx.coroutines.Dispatchers
@@ -19,49 +22,39 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.min
 
 class DashboardViewModel : ViewModel() {
-    private val _isEngineStarted: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    private val _isEngineStarted = MutableStateFlow(false)
     val isEngineStarted: StateFlow<Boolean> =
         _isEngineStarted
 
-    private val _speedometerTicks: MutableStateFlow<FloatArray> = MutableStateFlow(floatArrayOf())
-    val speedometerTicks: StateFlow<FloatArray> =
-        _speedometerTicks
+    private val _speedometer = MutableStateFlow<Meter?>(null)
+    val speedometer: StateFlow<Meter?> =
+        _speedometer
+    private val _tachometer = MutableStateFlow<Meter?>(null)
+    val tachometer: StateFlow<Meter?> =
+        _tachometer
 
-    private val _tachometerTicks: MutableStateFlow<FloatArray> = MutableStateFlow(floatArrayOf())
-    val tachometerTicks: StateFlow<FloatArray> =
-        _tachometerTicks
+    private val _speedometerValues =
+        MutableStateFlow<Pair<Float, Long>>(SPEEDOMETER_START_VALUE to 0)
+    private val _tachometerValues =
+        MutableStateFlow<Pair<Float, Long>>(TACHOMETER_ZERO to 0)
 
-    private val _speedometerBarLabels: MutableStateFlow<List<BarLabel>> = MutableStateFlow(listOf())
-    val speedometerBarLabels: StateFlow<List<BarLabel>> =
-        _speedometerBarLabels
-
-    private val _tachometerBarLabels: MutableStateFlow<List<BarLabel>> = MutableStateFlow(listOf())
-    val tachometerBarLabels: StateFlow<List<BarLabel>> =
-        _tachometerBarLabels
-
-    private val _tachometerValues: MutableSharedFlow<Pair<Float, Long>> =
-        MutableStateFlow(TACHOMETER_ZERO to 0)
     val tachometerValues: Flow<Pair<Float, Long>> = _tachometerValues
-
-    private val _speedometerValues: MutableSharedFlow<Pair<Float, Long>> =
-        MutableStateFlow(SPEEDOMETER_START_VALUE to 0)
     val speedometerValues: Flow<Pair<Float, Long>> = _speedometerValues
 
-    private val _speedometerNeedle: MutableSharedFlow<Needle?> = MutableStateFlow(null)
+    private val _speedometerNeedle = MutableStateFlow<Needle?>(null)
     val speedometerNeedle: Flow<Needle?> =
         _speedometerNeedle
-    private val _tachometerNeedle: MutableSharedFlow<Needle?> = MutableStateFlow(null)
+    private val _tachometerNeedle = MutableStateFlow<Needle?>(null)
     val tachometerNeedle: Flow<Needle?> =
         _tachometerNeedle
 
     private var tachometerJob: Job? = null
     private var speedometerJob: Job? = null
-    private var speedometerTicksJob: Job? = null
-    private var tachometerTicksJob: Job? = null
-    private var speedometerBarLabelsJob: Job? = null
-    private var tachometerBarLabelsJob: Job? = null
+    private var tachometerValuesJob: Job? = null
+    private var speedometerValuesJob: Job? = null
     private var speedometerNeedleJob: Job? = null
     private var tachometerNeedleJob: Job? = null
 
@@ -74,8 +67,8 @@ class DashboardViewModel : ViewModel() {
     }
 
     private fun onEngineStartClick() {
-        tachometerJob?.cancel()
-        tachometerJob = viewModelScope.launch {
+        tachometerValuesJob?.cancel()
+        tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
             withContext(Dispatchers.Default) {
                 _isEngineStarted.emit(true)
                 generateNextValues(
@@ -91,8 +84,8 @@ class DashboardViewModel : ViewModel() {
     }
 
     private fun onEngineStopClick() {
-        tachometerJob?.cancel()
-        tachometerJob = viewModelScope.launch {
+        tachometerValuesJob?.cancel()
+        tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
             withContext(Dispatchers.Default) {
                 _isEngineStarted.emit(false)
                 generateNextValues(
@@ -117,8 +110,8 @@ class DashboardViewModel : ViewModel() {
     }
 
     private fun onGoClick() {
-        tachometerJob?.cancel()
-        tachometerJob = viewModelScope.launch {
+        tachometerValuesJob?.cancel()
+        tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
             withContext(Dispatchers.Default) {
                 val downDelay = 2500L
                 val upDelay = 2000L
@@ -169,8 +162,8 @@ class DashboardViewModel : ViewModel() {
             }
         }
 
-        speedometerJob?.cancel()
-        speedometerJob = viewModelScope.launch {
+        speedometerValuesJob?.cancel()
+        speedometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
             withContext(Dispatchers.Default) {
                 val gearSwitchDelay = 5000L
                 val duration = 2500L
@@ -205,8 +198,8 @@ class DashboardViewModel : ViewModel() {
 
     private fun onBreakClick() {
         stopVehicle()
-        tachometerJob?.cancel()
-        tachometerJob = viewModelScope.launch {
+        tachometerValuesJob?.cancel()
+        tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
             withContext(Dispatchers.Default) {
                 generateNextValues(
                     _tachometerValues,
@@ -221,8 +214,8 @@ class DashboardViewModel : ViewModel() {
     }
 
     private fun stopVehicle() {
-        speedometerJob?.cancel()
-        speedometerJob = viewModelScope.launch {
+        speedometerValuesJob?.cancel()
+        speedometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
             withContext(Dispatchers.Default) {
                 generateNextValues(
                     _speedometerValues,
@@ -236,61 +229,169 @@ class DashboardViewModel : ViewModel() {
         }
     }
 
-    fun buildTicks(
+    fun buildMeter(
+        meterType: MeterType,
+        screenOrientation: Int,
+        canvasWidth: Int,
+        canvasHeight: Int,
+        paddingLeft: Int,
+        paddingRight: Int,
+        paddingTop: Int,
+        paddingBottom: Int,
+        majorTickLength: Float,
+        majorTickStep: Float,
+        minorTickStep: Float,
+        barMaxValue: Float
+    ) {
+        when (meterType) {
+            MeterType.SPEEDOMETER -> {
+                speedometerJob?.cancel()
+                speedometerJob = viewModelScope.launch(Dispatchers.Default) {
+                    _speedometer.emit(
+                        doBuildMeter(
+                            meterType = meterType,
+                            screenOrientation = screenOrientation,
+                            canvasWidth = canvasWidth,
+                            canvasHeight = canvasHeight,
+                            paddingLeft = paddingLeft,
+                            paddingRight = paddingRight,
+                            paddingTop = paddingTop,
+                            paddingBottom = paddingBottom,
+                            majorTickLength = majorTickLength,
+                            majorTickStep = majorTickStep,
+                            minorTickStep = minorTickStep,
+                            barMaxValue = barMaxValue
+                        )
+                    )
+                }
+            }
+            MeterType.TACHOMETER -> {
+                tachometerJob?.cancel()
+                tachometerJob = viewModelScope.launch(Dispatchers.Default) {
+                    _tachometer.emit(
+                        doBuildMeter(
+                            meterType = meterType,
+                            screenOrientation = screenOrientation,
+                            canvasWidth = canvasWidth,
+                            canvasHeight = canvasHeight,
+                            paddingLeft = paddingLeft,
+                            paddingRight = paddingRight,
+                            paddingTop = paddingTop,
+                            paddingBottom = paddingBottom,
+                            majorTickLength = majorTickLength,
+                            majorTickStep = majorTickStep,
+                            minorTickStep = minorTickStep,
+                            barMaxValue = barMaxValue
+                        )
+                    )
+                }
+            }
+            else -> throw UnsupportedOperationException()
+        }
+    }
+
+    private fun doBuildMeter(
+        meterType: MeterType,
+        screenOrientation: Int,
+        canvasWidth: Int,
+        canvasHeight: Int,
+        paddingLeft: Int,
+        paddingRight: Int,
+        paddingTop: Int,
+        paddingBottom: Int,
+        majorTickLength: Float,
+        majorTickStep: Float,
+        minorTickStep: Float,
+        barMaxValue: Float
+    ): Meter {
+
+        val borderBox = buildBordersBox(
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight,
+            paddingLeft = paddingLeft,
+            paddingRight = paddingRight,
+            paddingTop = paddingTop,
+            paddingBottom = paddingBottom,
+            meterType = meterType,
+            screenOrientation = screenOrientation
+        )
+        val needleCircleBox = buildBordersBox(
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight,
+            paddingLeft = paddingLeft,
+            paddingRight = paddingRight,
+            paddingTop = paddingTop,
+            paddingBottom = paddingBottom,
+            meterType = meterType,
+            screenOrientation = screenOrientation,
+            factor = NEEDLE_CIRCLE_RADIUS_COEFFICIENT
+        )
+        val ticks = buildTicks(
+            viewWidth = borderBox.width(),
+            centerX = borderBox.centerX(),
+            centerY = borderBox.centerY(),
+            majorTickLength = majorTickLength,
+            majorTickStep = majorTickStep,
+            minorTickStep = minorTickStep,
+            barMaxValue = barMaxValue
+        )
+        val barLabels = buildBarLabels(
+            majorTickStep = majorTickStep,
+            barMaxValue = barMaxValue
+        )
+        return Meter(
+            borderBox = borderBox,
+            needleCircleBox = needleCircleBox,
+            ticks = ticks,
+            barLabels = barLabels
+        )
+    }
+
+    private fun buildBordersBox(
+        canvasWidth: Int,
+        canvasHeight: Int,
+        paddingLeft: Int,
+        paddingRight: Int,
+        paddingTop: Int,
+        paddingBottom: Int,
+        meterType: MeterType,
+        screenOrientation: Int,
+        factor: Float = FACTOR_FULL
+    ): RectF {
+        val smallest =
+            min(
+                canvasWidth - paddingLeft - paddingRight,
+                canvasHeight - paddingTop - paddingBottom
+            )
+        val startX =
+            if (meterType == MeterType.SPEEDOMETER && screenOrientation != Configuration.ORIENTATION_PORTRAIT) {
+                smallest
+            } else {
+                0
+            }
+        val startY =
+            if (meterType == MeterType.SPEEDOMETER && screenOrientation == Configuration.ORIENTATION_PORTRAIT) {
+                smallest
+            } else {
+                0
+            }
+        return RectF(
+            startX + paddingLeft.toFloat(),
+            startY + paddingTop.toFloat(),
+            startX + smallest * factor + paddingRight,
+            startY + smallest * factor + paddingBottom
+        )
+    }
+
+    private fun buildTicks(
         viewWidth: Float,
         centerX: Float,
         centerY: Float,
         majorTickLength: Float,
         majorTickStep: Float,
         minorTickStep: Float,
-        barMaxValue: Float,
-        meterType: MeterType
-    ) {
-        when (meterType) {
-            MeterType.SPEEDOMETER -> {
-                speedometerTicksJob?.cancel()
-                speedometerTicksJob = viewModelScope.launch(Dispatchers.Default) {
-                    buildTicks(
-                        _speedometerTicks,
-                        viewWidth = viewWidth,
-                        majorTickLength = majorTickLength,
-                        majorTickStep = majorTickStep,
-                        barMaxValue = barMaxValue,
-                        minorTickStep = minorTickStep,
-                        centerX = centerX,
-                        centerY = centerY
-                    )
-                }
-            }
-            MeterType.TACHOMETER -> {
-                tachometerTicksJob?.cancel()
-                tachometerTicksJob = viewModelScope.launch(Dispatchers.Default) {
-                    buildTicks(
-                        _tachometerTicks,
-                        viewWidth = viewWidth,
-                        majorTickLength = majorTickLength,
-                        majorTickStep = majorTickStep,
-                        barMaxValue = barMaxValue,
-                        minorTickStep = minorTickStep,
-                        centerX = centerX,
-                        centerY = centerY
-                    )
-                }
-            }
-            MeterType.UNKNOWN -> throw UnsupportedOperationException()
-        }
-    }
-
-    private suspend fun buildTicks(
-        flow: MutableStateFlow<FloatArray>,
-        viewWidth: Float,
-        majorTickLength: Float,
-        majorTickStep: Float,
-        barMaxValue: Float,
-        minorTickStep: Float,
-        centerX: Float,
-        centerY: Float
-    ) {
+        barMaxValue: Float
+    ): FloatArray {
         val radius = viewWidth * MeterView.TICKS_RADIUS_COEFFICIENT
         var curProgress = 0f
 
@@ -332,44 +433,13 @@ class DashboardViewModel : ViewModel() {
             currentAngle += majorStepAngle
             curProgress += majorTickStep
         }
-        flow.emit(lines.toFloatArray())
+        return lines.toFloatArray()
     }
 
-    fun buildBarLabels(
+    private fun buildBarLabels(
         majorTickStep: Float,
         barMaxValue: Float,
-        meterType: MeterType
-    ) {
-        when (meterType) {
-            MeterType.SPEEDOMETER -> {
-                speedometerBarLabelsJob?.cancel()
-                speedometerBarLabelsJob = viewModelScope.launch(Dispatchers.Default) {
-                    buildBarLabels(
-                        _speedometerBarLabels,
-                        majorTickStep = majorTickStep,
-                        barMaxValue = barMaxValue
-                    )
-                }
-            }
-            MeterType.TACHOMETER -> {
-                tachometerBarLabelsJob?.cancel()
-                tachometerBarLabelsJob = viewModelScope.launch(Dispatchers.Default) {
-                    buildBarLabels(
-                        _tachometerBarLabels,
-                        majorTickStep = majorTickStep,
-                        barMaxValue = barMaxValue
-                    )
-                }
-            }
-            MeterType.UNKNOWN -> throw UnsupportedOperationException()
-        }
-    }
-
-    private suspend fun buildBarLabels(
-        flow: MutableStateFlow<List<BarLabel>>,
-        majorTickStep: Float,
-        barMaxValue: Float,
-    ) {
+    ): List<BarLabel> {
         val majorStepAngle =
             calcMajorStepAngle(
                 step = majorTickStep,
@@ -389,7 +459,7 @@ class DashboardViewModel : ViewModel() {
             currentAngle += majorStepAngle
             curProgress += majorTickStep
         }
-        flow.emit(barLabels)
+        return barLabels
     }
 
     private fun getBarLabel(progress: Float, majorTickStep: Float): String =
@@ -453,21 +523,24 @@ class DashboardViewModel : ViewModel() {
         val radius = viewWidth * NEEDLE_RADIUS_COEFFICIENT
         val majorStepAngle = MeterView.ARC_END_ANGLE / barMaxValue
         val angle = BAR_START_ANGLE + needleValue * majorStepAngle
-        val circleCenter = getHalf(circleDiameter)
+        val circleRadius = getHalf(circleDiameter)
         val cosOfAngle = cosInRadians(angle)
         val sinOfAngle = sinInRadians(angle)
         flow.emit(
             Needle(
-                startX = centerX + cosOfAngle * circleCenter,
-                startY = centerY - sinOfAngle * circleCenter,
+                startX = centerX + cosOfAngle * circleRadius,
+                startY = centerY - sinOfAngle * circleRadius,
                 stopX = centerX + cosOfAngle * radius,
                 stopY = centerY - sinOfAngle * radius,
-                circleCenter = circleCenter
+                circleRadius = circleRadius
             )
         )
     }
 
     companion object {
+        private const val FACTOR_FULL = 1f
+
+        private const val NEEDLE_CIRCLE_RADIUS_COEFFICIENT = 0.2f
         private const val NEEDLE_RADIUS_COEFFICIENT = 0.38f
 
         private const val SPEEDOMETER_START_VALUE = 0f

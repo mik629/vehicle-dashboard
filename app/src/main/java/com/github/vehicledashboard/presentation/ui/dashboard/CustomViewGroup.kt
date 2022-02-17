@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.util.AttributeSet
 import android.view.View
-import androidx.constraintlayout.widget.ConstraintLayout
+import android.widget.FrameLayout
 import androidx.core.view.marginBottom
 import com.github.vehicledashboard.domain.getHalf
 import com.github.vehicledashboard.presentation.models.MeterType
@@ -15,7 +15,7 @@ class CustomViewGroup @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
-) : ConstraintLayout(context, attrs, defStyleAttr) {
+) : FrameLayout(context, attrs, defStyleAttr) {
 
     private val tachometer: View?
         get() = getChildAt(0)
