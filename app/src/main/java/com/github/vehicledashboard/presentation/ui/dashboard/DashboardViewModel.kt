@@ -74,7 +74,8 @@ class DashboardViewModel : ViewModel() {
                 _tachometerValues,
                 startValue = TACHOMETER_ZERO,
                 step = TACHOMETER_STEP,
-                0..4,
+                gearStart = 0,
+                gearEnd = 4,
                 animationDuration = 1000L,
                 endDelay = 0L
             )
@@ -89,7 +90,8 @@ class DashboardViewModel : ViewModel() {
                 _tachometerValues,
                 startValue = TACHOMETER_ZERO,
                 step = -TACHOMETER_STEP,
-                0..0,
+                gearStart = 0,
+                gearEnd = 0,
                 animationDuration = 1000L,
                 endDelay = 0L
             )
@@ -113,13 +115,16 @@ class DashboardViewModel : ViewModel() {
             val upDelay = 2000L
             val durationUp = 1000L
             val durationDown = 1200L
-            val firstGearRange = 1..24
-            val gearRange = 1..18
+            val firstGearStart = 1
+            val firstGearEnd = 24
+            val gearStart = 1
+            val gearEnd = 18
             var nextValue = generateNextValues(
                 _tachometerValues,
                 startValue = TACHOMETER_START_VALUE,
                 step = TACHOMETER_STEP,
-                firstGearRange,
+                gearStart = firstGearStart,
+                gearEnd = firstGearEnd,
                 animationDuration = durationUp,
                 endDelay = downDelay
             )
@@ -127,7 +132,8 @@ class DashboardViewModel : ViewModel() {
                 _tachometerValues,
                 startValue = nextValue,
                 step = -TACHOMETER_STEP,
-                gearRange,
+                gearStart = gearStart,
+                gearEnd = gearEnd,
                 animationDuration = durationDown,
                 endDelay = downDelay
             )
@@ -135,7 +141,8 @@ class DashboardViewModel : ViewModel() {
                 _tachometerValues,
                 startValue = nextValue,
                 step = TACHOMETER_STEP,
-                gearRange,
+                gearStart = gearStart,
+                gearEnd = gearEnd,
                 animationDuration = durationUp,
                 endDelay = upDelay
             )
@@ -143,7 +150,8 @@ class DashboardViewModel : ViewModel() {
                 _tachometerValues,
                 startValue = nextValue,
                 step = -TACHOMETER_STEP,
-                gearRange,
+                gearStart = gearStart,
+                gearEnd = gearEnd,
                 animationDuration = durationDown,
                 endDelay = downDelay
             )
@@ -151,7 +159,8 @@ class DashboardViewModel : ViewModel() {
                 _tachometerValues,
                 startValue = nextValue,
                 step = TACHOMETER_STEP,
-                gearRange,
+                gearStart = gearStart,
+                gearEnd = gearEnd,
                 animationDuration = durationUp + 1000,
                 endDelay = upDelay
             )
@@ -161,12 +170,14 @@ class DashboardViewModel : ViewModel() {
         speedometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
             val gearSwitchDelay = 5000L
             val duration = 2500L
-            val gearRange = 0..16
+            val gearStart = 0
+            val gearEnd = 16
             var nextValue = generateNextValues(
                 _speedometerValues,
                 startValue = SPEEDOMETER_START_VALUE,
                 step = SPEEDOMETER_STEP,
-                gearRange,
+                gearStart = gearStart,
+                gearEnd = gearEnd,
                 animationDuration = duration,
                 endDelay = gearSwitchDelay
             )
@@ -174,7 +185,8 @@ class DashboardViewModel : ViewModel() {
                 _speedometerValues,
                 startValue = nextValue,
                 step = SPEEDOMETER_STEP,
-                gearRange,
+                gearStart = gearStart,
+                gearEnd = gearEnd,
                 animationDuration = duration,
                 endDelay = gearSwitchDelay
             )
@@ -182,7 +194,8 @@ class DashboardViewModel : ViewModel() {
                 _speedometerValues,
                 startValue = nextValue,
                 step = SPEEDOMETER_STEP,
-                gearRange,
+                gearStart = gearStart,
+                gearEnd = gearEnd,
                 animationDuration = duration,
                 endDelay = gearSwitchDelay
             )
@@ -197,7 +210,8 @@ class DashboardViewModel : ViewModel() {
                 _tachometerValues,
                 startValue = TACHOMETER_START_VALUE,
                 step = -SPEEDOMETER_STEP,
-                0..0,
+                gearStart = 0,
+                gearEnd = 0,
                 animationDuration = 2000L,
                 endDelay = 0
             )
@@ -211,7 +225,8 @@ class DashboardViewModel : ViewModel() {
                 _speedometerValues,
                 startValue = SPEEDOMETER_START_VALUE,
                 step = -SPEEDOMETER_STEP,
-                0..0,
+                gearStart = 0,
+                gearEnd = 0,
                 animationDuration = 2000L,
                 endDelay = 0
             )
@@ -222,11 +237,12 @@ class DashboardViewModel : ViewModel() {
         flow: MutableSharedFlow<Pair<Float, Long>>,
         startValue: Float,
         step: Float,
-        gearRange: IntRange,
+        gearStart: Int,
+        gearEnd: Int,
         animationDuration: Long,
         endDelay: Long
     ): Float =
-        (startValue + (gearRange.last - gearRange.first) * step)
+        (startValue + (gearEnd - gearStart) * step)
             .also { nextValue ->
                 flow.emit(nextValue to animationDuration)
                 delay(endDelay)
