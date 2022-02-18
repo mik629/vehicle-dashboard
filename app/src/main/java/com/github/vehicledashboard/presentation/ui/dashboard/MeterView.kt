@@ -18,7 +18,6 @@ import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.github.vehicledashboard.R
-import com.github.vehicledashboard.domain.getHalf
 import com.github.vehicledashboard.domain.inBetweenExclusive
 import com.github.vehicledashboard.presentation.models.BarLabel
 import com.github.vehicledashboard.presentation.models.Meter
@@ -48,7 +47,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }
 
     private var barBackgroundColor: Int = 0
-
     private var barValuePadding = 0f
 
     private var majorTickStep = UNSPECIFIED
@@ -195,14 +193,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                         }
                         launch {
                             chooseFlow(
-                                speedometerFlow = dashboardViewModel.speedometerNeedle,
-                                tachometerFlow = dashboardViewModel.tachometerNeedle
-                            ).collect { aNeedle ->
-                                needle = aNeedle
-                            }
-                        }
-                        launch {
-                            chooseFlow(
                                 speedometerFlow = dashboardViewModel.speedometerValues,
                                 tachometerFlow = dashboardViewModel.tachometerValues
                             ).collect { nextValue ->
@@ -211,6 +201,14 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                                     duration = nextValue.second,
                                     startDelay = 0L
                                 )
+                            }
+                        }
+                        launch {
+                            chooseFlow(
+                                speedometerFlow = dashboardViewModel.speedometerNeedle,
+                                tachometerFlow = dashboardViewModel.tachometerNeedle
+                            ).collect { aNeedle ->
+                                needle = aNeedle
                             }
                         }
                     }
@@ -257,6 +255,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
 
     override fun onDraw(canvas: Canvas) {
         println("onDraw called ${i++}-th time")
+        val startTime = System.nanoTime()
         backgroundPaint.color = if (isEnabled) {
             barBackgroundColor
         } else {
@@ -276,33 +275,36 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 majorTickLength = DEFAULT_MAJOR_TICK_LENGTH,
                 majorTickStep = majorTickStep,
                 minorTickStep = minorTickStep,
+                barValuePadding = barValuePadding,
                 barMaxValue = barMaxValue
             )
         }
 
-        meter?.let { meter ->
-            val centerX = meter.borderBox.centerX()
-            val centerY = meter.borderBox.centerY()
-            val viewWidth = meter.borderBox.width()
+        meter?.let { meterData ->
+            val centerX = meterData.borderBox.centerX()
+            val centerY = meterData.borderBox.centerY()
+            val viewWidth = meterData.borderBox.width()
 
             drawBackground(canvas, centerX, centerY)
-            drawArc(canvas, meter.borderBox)
+            drawArc(canvas, meterData.borderBox)
             drawTicks(
                 canvas = canvas,
-                barLabels = meter.barLabels,
-                tickLines = meter.ticks,
+                barLabels = meterData.barLabels,
+                tickLines = meterData.ticks,
                 centerX = centerX,
                 centerY = centerY,
-                viewWidth = viewWidth
+                barLabelX = meterData.barLabelX,
+                barLabelY = meterData.barLabelY
             )
             drawNeedle(
                 canvas = canvas,
-                circleDiameter = meter.needleCircleBox.width(),
+                circleDiameter = meterData.needleCircleBox.width(),
                 centerX = centerX,
                 centerY = centerY,
                 viewWidth = viewWidth
             )
         }
+        println("onDraw took: ${(System.nanoTime() - startTime) / 1000000f}")
     }
 
     private fun drawBackground(canvas: Canvas, centerX: Float, centerY: Float) {
@@ -319,20 +321,17 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         tickLines: FloatArray,
         centerX: Float,
         centerY: Float,
-        viewWidth: Float
+        barLabelX: Float,
+        barLabelY: Float
     ) {
-        val radius = viewWidth * TICKS_RADIUS_COEFFICIENT
-        val txtX = centerX + radius - getHalf(DEFAULT_MAJOR_TICK_LENGTH) - barValuePadding
-        val txtY = centerY + barValuePadding
-
         for (barLabel in barLabels) {
             canvas.save()
             canvas.rotate(barLabel.rotationAngle, centerX, centerY)
-            canvas.rotate(BAR_TEXT_ROTATION, txtX, centerY)
+            canvas.rotate(BAR_TEXT_ROTATION, barLabelX, centerY)
             canvas.drawText(
                 barLabel.label,
-                txtX,
-                txtY,
+                barLabelX,
+                barLabelY,
                 txtPaint
             )
             canvas.restore()
@@ -347,15 +346,15 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         centerY: Float,
         viewWidth: Float
     ) {
-        needle?.let { aNeedle ->
+        needle?.let { needleData ->
             canvas.drawLine(
-                aNeedle.startX,
-                aNeedle.startY,
-                aNeedle.stopX,
-                aNeedle.stopY,
+                needleData.startX,
+                needleData.startY,
+                needleData.stopX,
+                needleData.stopY,
                 needlePaint
             )
-            canvas.drawCircle(centerX, centerY, aNeedle.circleRadius, ticksPaint)
+            canvas.drawCircle(centerX, centerY, needleData.circleRadius, ticksPaint)
         }
 
         dashboardViewModel.buildNeedle(
@@ -385,7 +384,5 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         const val ARC_END_ANGLE = 260f
 
         private const val BAR_TEXT_ROTATION = 90f
-
-        const val TICKS_RADIUS_COEFFICIENT = 0.48f
     }
 }

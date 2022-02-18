@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.min
 
 class DashboardViewModel : ViewModel() {
@@ -38,11 +37,12 @@ class DashboardViewModel : ViewModel() {
 
     private val _speedometerValues =
         MutableStateFlow<Pair<Float, Long>>(SPEEDOMETER_START_VALUE to 0)
+    val speedometerValues: Flow<Pair<Float, Long>> =
+        _speedometerValues
     private val _tachometerValues =
         MutableStateFlow<Pair<Float, Long>>(TACHOMETER_ZERO to 0)
-
-    val tachometerValues: Flow<Pair<Float, Long>> = _tachometerValues
-    val speedometerValues: Flow<Pair<Float, Long>> = _speedometerValues
+    val tachometerValues: Flow<Pair<Float, Long>> =
+        _tachometerValues
 
     private val _speedometerNeedle = MutableStateFlow<Needle?>(null)
     val speedometerNeedle: Flow<Needle?> =
@@ -69,34 +69,30 @@ class DashboardViewModel : ViewModel() {
     private fun onEngineStartClick() {
         tachometerValuesJob?.cancel()
         tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            withContext(Dispatchers.Default) {
-                _isEngineStarted.emit(true)
-                generateNextValues(
-                    _tachometerValues,
-                    startValue = TACHOMETER_ZERO,
-                    step = TACHOMETER_STEP,
-                    0..4,
-                    animationDuration = 1000L,
-                    endDelay = 0L
-                )
-            }
+            _isEngineStarted.emit(true)
+            generateNextValues(
+                _tachometerValues,
+                startValue = TACHOMETER_ZERO,
+                step = TACHOMETER_STEP,
+                0..4,
+                animationDuration = 1000L,
+                endDelay = 0L
+            )
         }
     }
 
     private fun onEngineStopClick() {
         tachometerValuesJob?.cancel()
         tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            withContext(Dispatchers.Default) {
-                _isEngineStarted.emit(false)
-                generateNextValues(
-                    _tachometerValues,
-                    startValue = TACHOMETER_ZERO,
-                    step = -TACHOMETER_STEP,
-                    0..0,
-                    animationDuration = 1000L,
-                    endDelay = 0L
-                )
-            }
+            _isEngineStarted.emit(false)
+            generateNextValues(
+                _tachometerValues,
+                startValue = TACHOMETER_ZERO,
+                step = -TACHOMETER_STEP,
+                0..0,
+                animationDuration = 1000L,
+                endDelay = 0L
+            )
         }
         stopVehicle()
     }
@@ -109,90 +105,87 @@ class DashboardViewModel : ViewModel() {
         }
     }
 
+    // todo: move to a repo/service
     private fun onGoClick() {
         tachometerValuesJob?.cancel()
         tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            withContext(Dispatchers.Default) {
-                val downDelay = 2500L
-                val upDelay = 2000L
-                val durationUp = 1000L
-                val durationDown = 1200L
-                val firstGearRange = 1..24
-                val gearRange = 1..18
-                var nextValue = generateNextValues(
-                    _tachometerValues,
-                    startValue = TACHOMETER_START_VALUE,
-                    step = TACHOMETER_STEP,
-                    firstGearRange,
-                    animationDuration = durationUp,
-                    endDelay = downDelay
-                )
-                nextValue = generateNextValues(
-                    _tachometerValues,
-                    startValue = nextValue,
-                    step = -TACHOMETER_STEP,
-                    gearRange,
-                    animationDuration = durationDown,
-                    endDelay = downDelay
-                )
-                nextValue = generateNextValues(
-                    _tachometerValues,
-                    startValue = nextValue,
-                    step = TACHOMETER_STEP,
-                    gearRange,
-                    animationDuration = durationUp,
-                    endDelay = upDelay
-                )
-                nextValue = generateNextValues(
-                    _tachometerValues,
-                    startValue = nextValue,
-                    step = -TACHOMETER_STEP,
-                    gearRange,
-                    animationDuration = durationDown,
-                    endDelay = downDelay
-                )
-                generateNextValues(
-                    _tachometerValues,
-                    startValue = nextValue,
-                    step = TACHOMETER_STEP,
-                    gearRange,
-                    animationDuration = durationUp + 1000,
-                    endDelay = upDelay
-                )
-            }
+            val downDelay = 2500L
+            val upDelay = 2000L
+            val durationUp = 1000L
+            val durationDown = 1200L
+            val firstGearRange = 1..24
+            val gearRange = 1..18
+            var nextValue = generateNextValues(
+                _tachometerValues,
+                startValue = TACHOMETER_START_VALUE,
+                step = TACHOMETER_STEP,
+                firstGearRange,
+                animationDuration = durationUp,
+                endDelay = downDelay
+            )
+            nextValue = generateNextValues(
+                _tachometerValues,
+                startValue = nextValue,
+                step = -TACHOMETER_STEP,
+                gearRange,
+                animationDuration = durationDown,
+                endDelay = downDelay
+            )
+            nextValue = generateNextValues(
+                _tachometerValues,
+                startValue = nextValue,
+                step = TACHOMETER_STEP,
+                gearRange,
+                animationDuration = durationUp,
+                endDelay = upDelay
+            )
+            nextValue = generateNextValues(
+                _tachometerValues,
+                startValue = nextValue,
+                step = -TACHOMETER_STEP,
+                gearRange,
+                animationDuration = durationDown,
+                endDelay = downDelay
+            )
+            generateNextValues(
+                _tachometerValues,
+                startValue = nextValue,
+                step = TACHOMETER_STEP,
+                gearRange,
+                animationDuration = durationUp + 1000,
+                endDelay = upDelay
+            )
         }
 
         speedometerValuesJob?.cancel()
         speedometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            withContext(Dispatchers.Default) {
-                val gearSwitchDelay = 5000L
-                val duration = 2500L
-                val gearRange = 0..16
-                var nextValue = generateNextValues(
-                    _speedometerValues,
-                    startValue = SPEEDOMETER_START_VALUE,
-                    step = SPEEDOMETER_STEP,
-                    gearRange,
-                    animationDuration = duration,
-                    endDelay = gearSwitchDelay
-                )
-                nextValue = generateNextValues(
-                    _speedometerValues,
-                    startValue = nextValue,
-                    step = SPEEDOMETER_STEP,
-                    gearRange,
-                    animationDuration = duration,
-                    endDelay = gearSwitchDelay
-                )
-                generateNextValues(
-                    _speedometerValues,
-                    startValue = nextValue,
-                    step = SPEEDOMETER_STEP,
-                    gearRange,
-                    animationDuration = duration,
-                    endDelay = gearSwitchDelay
-                )
-            }
+            val gearSwitchDelay = 5000L
+            val duration = 2500L
+            val gearRange = 0..16
+            var nextValue = generateNextValues(
+                _speedometerValues,
+                startValue = SPEEDOMETER_START_VALUE,
+                step = SPEEDOMETER_STEP,
+                gearRange,
+                animationDuration = duration,
+                endDelay = gearSwitchDelay
+            )
+            nextValue = generateNextValues(
+                _speedometerValues,
+                startValue = nextValue,
+                step = SPEEDOMETER_STEP,
+                gearRange,
+                animationDuration = duration,
+                endDelay = gearSwitchDelay
+            )
+            generateNextValues(
+                _speedometerValues,
+                startValue = nextValue,
+                step = SPEEDOMETER_STEP,
+                gearRange,
+                animationDuration = duration,
+                endDelay = gearSwitchDelay
+            )
         }
     }
 
@@ -200,34 +193,44 @@ class DashboardViewModel : ViewModel() {
         stopVehicle()
         tachometerValuesJob?.cancel()
         tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            withContext(Dispatchers.Default) {
-                generateNextValues(
-                    _tachometerValues,
-                    startValue = TACHOMETER_START_VALUE,
-                    step = -SPEEDOMETER_STEP,
-                    0..0,
-                    animationDuration = 2000L,
-                    endDelay = 0
-                )
-            }
+            generateNextValues(
+                _tachometerValues,
+                startValue = TACHOMETER_START_VALUE,
+                step = -SPEEDOMETER_STEP,
+                0..0,
+                animationDuration = 2000L,
+                endDelay = 0
+            )
         }
     }
 
     private fun stopVehicle() {
         speedometerValuesJob?.cancel()
         speedometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            withContext(Dispatchers.Default) {
-                generateNextValues(
-                    _speedometerValues,
-                    startValue = SPEEDOMETER_START_VALUE,
-                    step = -SPEEDOMETER_STEP,
-                    0..0,
-                    animationDuration = 2000L,
-                    endDelay = 0
-                )
-            }
+            generateNextValues(
+                _speedometerValues,
+                startValue = SPEEDOMETER_START_VALUE,
+                step = -SPEEDOMETER_STEP,
+                0..0,
+                animationDuration = 2000L,
+                endDelay = 0
+            )
         }
     }
+
+    private suspend fun generateNextValues(
+        flow: MutableSharedFlow<Pair<Float, Long>>,
+        startValue: Float,
+        step: Float,
+        gearRange: IntRange,
+        animationDuration: Long,
+        endDelay: Long
+    ): Float =
+        (startValue + (gearRange.last - gearRange.first) * step)
+            .also { nextValue ->
+                flow.emit(nextValue to animationDuration)
+                delay(endDelay)
+            }
 
     fun buildMeter(
         meterType: MeterType,
@@ -241,6 +244,7 @@ class DashboardViewModel : ViewModel() {
         majorTickLength: Float,
         majorTickStep: Float,
         minorTickStep: Float,
+        barValuePadding: Float,
         barMaxValue: Float
     ) {
         when (meterType) {
@@ -260,6 +264,7 @@ class DashboardViewModel : ViewModel() {
                             majorTickLength = majorTickLength,
                             majorTickStep = majorTickStep,
                             minorTickStep = minorTickStep,
+                            barValuePadding = barValuePadding,
                             barMaxValue = barMaxValue
                         )
                     )
@@ -281,6 +286,7 @@ class DashboardViewModel : ViewModel() {
                             majorTickLength = majorTickLength,
                             majorTickStep = majorTickStep,
                             minorTickStep = minorTickStep,
+                            barValuePadding = barValuePadding,
                             barMaxValue = barMaxValue
                         )
                     )
@@ -302,6 +308,7 @@ class DashboardViewModel : ViewModel() {
         majorTickLength: Float,
         majorTickStep: Float,
         minorTickStep: Float,
+        barValuePadding: Float,
         barMaxValue: Float
     ): Meter {
 
@@ -326,11 +333,15 @@ class DashboardViewModel : ViewModel() {
             screenOrientation = screenOrientation,
             factor = NEEDLE_CIRCLE_RADIUS_COEFFICIENT
         )
+        val radius = borderBox.width() * TICKS_RADIUS_COEFFICIENT
+        val centerX = borderBox.centerX()
+        val centerY = borderBox.centerY()
+        val minorTickLength = getHalf(majorTickLength)
         val ticks = buildTicks(
-            viewWidth = borderBox.width(),
-            centerX = borderBox.centerX(),
-            centerY = borderBox.centerY(),
-            majorTickLength = majorTickLength,
+            radius = radius,
+            centerX = centerX,
+            centerY = centerY,
+            minorTickLength = minorTickLength,
             majorTickStep = majorTickStep,
             minorTickStep = minorTickStep,
             barMaxValue = barMaxValue
@@ -343,7 +354,9 @@ class DashboardViewModel : ViewModel() {
             borderBox = borderBox,
             needleCircleBox = needleCircleBox,
             ticks = ticks,
-            barLabels = barLabels
+            barLabels = barLabels,
+            centerX + radius - minorTickLength - barValuePadding,
+            centerY + barValuePadding
         )
     }
 
@@ -384,21 +397,19 @@ class DashboardViewModel : ViewModel() {
     }
 
     private fun buildTicks(
-        viewWidth: Float,
+        radius: Float,
         centerX: Float,
         centerY: Float,
-        majorTickLength: Float,
+        minorTickLength: Float,
         majorTickStep: Float,
         minorTickStep: Float,
         barMaxValue: Float
     ): FloatArray {
-        val radius = viewWidth * MeterView.TICKS_RADIUS_COEFFICIENT
         var curProgress = 0f
 
         var currentAngle = BAR_START_ANGLE
         val endAngle = MeterView.ARC_END_ANGLE + currentAngle
 
-        val minorTickLength = getHalf(majorTickLength)
         val majorStepAngle =
             calcMajorStepAngle(
                 step = majorTickStep,
@@ -553,18 +564,6 @@ class DashboardViewModel : ViewModel() {
         private const val BAR_DIGIT_FORMAT = "%.0f"
         private const val BAR_START_ANGLE = -40f
 
-        suspend fun generateNextValues(
-            flow: MutableSharedFlow<Pair<Float, Long>>,
-            startValue: Float,
-            step: Float,
-            gearRange: IntRange,
-            animationDuration: Long,
-            endDelay: Long
-        ): Float =
-            (startValue + (gearRange.last - gearRange.first) * step)
-                .also { nextValue ->
-                    flow.emit(nextValue to animationDuration)
-                    delay(endDelay)
-                }
+        private const val TICKS_RADIUS_COEFFICIENT = 0.48f
     }
 }
