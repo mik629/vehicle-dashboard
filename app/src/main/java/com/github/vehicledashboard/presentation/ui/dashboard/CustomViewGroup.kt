@@ -72,17 +72,13 @@ class CustomViewGroup @JvmOverloads constructor(
             meterViewHeight = speedometerHeight,
             goButton,
             MeterType.SPEEDOMETER,
-            meterViewPaddingBottom = if (screenOrientation == Configuration.ORIENTATION_PORTRAIT) {
-                (speedometer?.paddingBottom ?: 0) * 3
-            } else {
-                (speedometer?.paddingBottom ?: 0)
-            }, // fixme: what a hack
+            meterViewPaddingBottom = (speedometer?.paddingBottom ?: 0),
             r = r,
             paddingRight = if (screenOrientation == Configuration.ORIENTATION_PORTRAIT) {
                 0
             } else {
-                (speedometer?.paddingRight ?: 0) * 2
-            } // fixme: what a hack
+                (speedometer?.paddingRight ?: 0)
+            }
         )
         closeButton?.layout(
             r - (closeButton?.measuredWidth ?: 0),
