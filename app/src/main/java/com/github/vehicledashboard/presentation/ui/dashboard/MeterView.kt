@@ -19,11 +19,11 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.github.vehicledashboard.R
 import com.github.vehicledashboard.domain.inBetweenExclusive
+import com.github.vehicledashboard.domain.models.MeterType
+import com.github.vehicledashboard.domain.models.fromId
 import com.github.vehicledashboard.presentation.models.BarLabel
 import com.github.vehicledashboard.presentation.models.Meter
-import com.github.vehicledashboard.presentation.models.MeterType
 import com.github.vehicledashboard.presentation.models.Needle
-import com.github.vehicledashboard.presentation.models.fromId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -196,11 +196,13 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                                 speedometerFlow = dashboardViewModel.speedometerValues,
                                 tachometerFlow = dashboardViewModel.tachometerValues
                             ).collect { nextValue ->
-                                setNeedleValue(
-                                    progress = nextValue.first,
-                                    duration = nextValue.second,
-                                    startDelay = 0L
-                                )
+                                nextValue?.let { needleValue ->
+                                    setNeedleValue(
+                                        progress = needleValue.value,
+                                        duration = needleValue.animationDuration,
+                                        startDelay = 0L
+                                    )
+                                }
                             }
                         }
                         launch {
@@ -251,11 +253,8 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         meter = null
     }
 
-    private var i = 0
-
     override fun onDraw(canvas: Canvas) {
-        println("onDraw called ${i++}-th time")
-        val startTime = System.nanoTime()
+        System.nanoTime()
         backgroundPaint.color = if (isEnabled) {
             barBackgroundColor
         } else {
@@ -304,7 +303,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                 viewWidth = viewWidth
             )
         }
-        println("onDraw took: ${(System.nanoTime() - startTime) / 1000000f}")
     }
 
     private fun drawBackground(canvas: Canvas, centerX: Float, centerY: Float) {

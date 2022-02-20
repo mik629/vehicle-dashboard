@@ -15,8 +15,7 @@
         app:barMajorStep="1"
         app:barMaxValue="8"
         app:barMinorStep="0.2"
-        app:meterType="TACHOMETER"
-        app:needleStartValue="0.8" />
+        app:meterType="TACHOMETER" />
 
     <Button
         android:id="@+id/button_start_stop"

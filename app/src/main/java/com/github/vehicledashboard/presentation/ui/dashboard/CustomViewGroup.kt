@@ -7,7 +7,7 @@ import android.view.View
 import android.widget.FrameLayout
 import androidx.core.view.marginBottom
 import com.github.vehicledashboard.domain.getHalf
-import com.github.vehicledashboard.presentation.models.MeterType
+import com.github.vehicledashboard.domain.models.MeterType
 import kotlin.math.max
 import kotlin.math.min
 

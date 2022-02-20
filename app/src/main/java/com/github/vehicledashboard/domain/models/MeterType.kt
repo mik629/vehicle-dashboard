@@ -1,4 +1,4 @@
-package com.github.vehicledashboard.presentation.models
+package com.github.vehicledashboard.domain.models
 
 enum class MeterType(val id: Int) {
     SPEEDOMETER(0),

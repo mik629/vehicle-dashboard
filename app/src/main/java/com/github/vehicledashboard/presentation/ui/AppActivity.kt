@@ -1,12 +1,18 @@
 package com.github.vehicledashboard.presentation.ui
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import androidx.activity.viewModels
 import androidx.annotation.ColorRes
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -15,15 +21,37 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.github.vehicledashboard.INeedleValuesGeneratorService
 import com.github.vehicledashboard.R
 import com.github.vehicledashboard.databinding.AppActivityBinding
+import com.github.vehicledashboard.presentation.models.GoBreak
 import com.github.vehicledashboard.presentation.models.engineOppositeState
 import com.github.vehicledashboard.presentation.models.vehicleOppositeState
 import com.github.vehicledashboard.presentation.ui.dashboard.DashboardViewModel
+import com.github.vehicledashboard.services.NeedleValuesGeneratorService
 import kotlinx.coroutines.launch
 import kotlin.system.exitProcess
 
 class AppActivity : AppCompatActivity() {
+
+    private var needleValuesGeneratorService: INeedleValuesGeneratorService? = null
+    private val serviceConnection = object : ServiceConnection {
+
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            // This is called when the connection with the service has been
+            // established, giving us the service object we can use to
+            // interact with the service.  We are communicating with our
+            // service through an IDL interface, so get a client-side
+            // representation of that from the raw service object.
+            needleValuesGeneratorService = INeedleValuesGeneratorService.Stub.asInterface(service)
+        }
+
+        override fun onServiceDisconnected(className: ComponentName) {
+            // This is called when the connection with the service has been
+            // unexpectedly disconnected -- that is, its process crashed.
+            needleValuesGeneratorService = null
+        }
+    }
 
     private lateinit var binding: AppActivityBinding
     private val dashboardViewModel: DashboardViewModel by viewModels()
@@ -62,49 +90,83 @@ class AppActivity : AppCompatActivity() {
             dashboardViewModel.isEngineStarted
                 .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
                 .collect { isEngineStarted ->
-                    binding.buttonGoBreak.apply {
-                        isEnabled = isEngineStarted
-                        text = getString(R.string.go)
-                    }
+                    fillButton(
+                        binding.buttonGoBreak,
+                        GoBreak.GO.stringId,
+                        GoBreak.GO.colorId,
+                        isEngineStarted
+                    )
                 }
         }
 
+        val needleValueGenerator = { meterType: String,
+                                     engineMode: String ->
+
+            requireNotNull(needleValuesGeneratorService).generateNextValues(
+                meterType,
+                engineMode
+            )
+        }
         binding.buttonStartStop.setOnClickListener {
             val start = binding.buttonStartStop.text == getString(R.string.start)
             val engineOppositeState = engineOppositeState(start)
-            dashboardViewModel.onEngineStartStopClick(start)
+            dashboardViewModel.onEngineStartStopClick(start, needleValueGenerator)
             fillButton(
                 binding.buttonStartStop,
-                getString(engineOppositeState.stringId),
+                engineOppositeState.stringId,
                 engineOppositeState.colorId
             )
         }
         binding.buttonGoBreak.setOnClickListener {
             val go = binding.buttonGoBreak.text == getString(R.string.go)
             val vehicleOppositeState = vehicleOppositeState(go)
-            dashboardViewModel.onGoBreakClick(go)
+            dashboardViewModel.onGoBreakClick(go, needleValueGenerator)
             fillButton(
                 binding.buttonGoBreak,
-                getString(vehicleOppositeState.stringId),
+                vehicleOppositeState.stringId,
                 vehicleOppositeState.colorId
             )
         }
         binding.buttonClose.setOnClickListener {
             finish()
-            exitProcess(0) // fixme: a better way of colsing the app
+            exitProcess(0) // fixme: a better way of closing the app
         }
     }
 
-    private fun fillButton(button: Button, buttonText: String, @ColorRes colorId: Int) {
+    private fun fillButton(
+        button: Button,
+        @StringRes buttonTextId: Int,
+        @ColorRes colorId: Int,
+        isEnabled: Boolean = true
+    ) {
         button.apply {
-            text = buttonText
+            text = getString(buttonTextId)
             setTextColor(
                 ContextCompat.getColor(
                     context,
                     colorId
                 )
             )
+            this.isEnabled = isEnabled
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        bindToService()
+    }
+
+    private fun bindToService(): Boolean {
+        val intent = Intent(this, NeedleValuesGeneratorService::class.java)
+            .apply {
+                action = INeedleValuesGeneratorService::class.java.name
+            }
+        return bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onStop() {
+        unbindService(serviceConnection)
+        super.onStop()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

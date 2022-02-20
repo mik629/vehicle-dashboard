@@ -2,16 +2,19 @@ package com.github.vehicledashboard.presentation.ui.dashboard
 
 import android.content.res.Configuration
 import android.graphics.RectF
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.vehicledashboard.NeedleValue
 import com.github.vehicledashboard.domain.PI_IN_DEGREES
 import com.github.vehicledashboard.domain.calcMajorStepAngle
 import com.github.vehicledashboard.domain.cosInRadians
 import com.github.vehicledashboard.domain.getHalf
+import com.github.vehicledashboard.domain.models.EngineMode
+import com.github.vehicledashboard.domain.models.MeterType
 import com.github.vehicledashboard.domain.sinInRadians
 import com.github.vehicledashboard.presentation.models.BarLabel
 import com.github.vehicledashboard.presentation.models.Meter
-import com.github.vehicledashboard.presentation.models.MeterType
 import com.github.vehicledashboard.presentation.models.Needle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,12 +39,12 @@ class DashboardViewModel : ViewModel() {
         _tachometer
 
     private val _speedometerValues =
-        MutableStateFlow<Pair<Float, Long>>(SPEEDOMETER_START_VALUE to 0)
-    val speedometerValues: Flow<Pair<Float, Long>> =
+        MutableStateFlow<NeedleValue?>(null)
+    val speedometerValues: Flow<NeedleValue?> =
         _speedometerValues
     private val _tachometerValues =
-        MutableStateFlow<Pair<Float, Long>>(TACHOMETER_ZERO to 0)
-    val tachometerValues: Flow<Pair<Float, Long>> =
+        MutableStateFlow<NeedleValue?>(null)
+    val tachometerValues: Flow<NeedleValue?> =
         _tachometerValues
 
     private val _speedometerNeedle = MutableStateFlow<Needle?>(null)
@@ -58,195 +61,111 @@ class DashboardViewModel : ViewModel() {
     private var speedometerNeedleJob: Job? = null
     private var tachometerNeedleJob: Job? = null
 
-    fun onEngineStartStopClick(start: Boolean) {
-        if (start) {
-            onEngineStartClick()
+    fun onEngineStartStopClick(
+        start: Boolean,
+        needleValueGenerator: (
+            meterType: String,
+            engineMode: String
+        ) -> List<NeedleValue>
+    ) {
+        val engineMode = if (start) {
+            EngineMode.START.name
         } else {
-            onEngineStopClick()
+            EngineMode.STOP.name
         }
-    }
-
-    private fun onEngineStartClick() {
         tachometerValuesJob?.cancel()
-        tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            _isEngineStarted.emit(true)
-            generateNextValues(
-                _tachometerValues,
-                startValue = TACHOMETER_ZERO,
-                step = TACHOMETER_STEP,
-                gearStart = 0,
-                gearEnd = 4,
-                animationDuration = 1000L,
-                endDelay = 0L
+        tachometerValuesJob = viewModelScope.launch(Dispatchers.IO) {
+            _isEngineStarted.emit(start)
+            postNeedleValues(
+                needleValueGenerator(
+                    MeterType.TACHOMETER.name,
+                    engineMode
+                )
             )
         }
-    }
-
-    private fun onEngineStopClick() {
-        tachometerValuesJob?.cancel()
-        tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            _isEngineStarted.emit(false)
-            generateNextValues(
-                _tachometerValues,
-                startValue = TACHOMETER_ZERO,
-                step = -TACHOMETER_STEP,
-                gearStart = 0,
-                gearEnd = 0,
-                animationDuration = 1000L,
-                endDelay = 0L
-            )
-        }
-        stopVehicle()
-    }
-
-    fun onGoBreakClick(go: Boolean) {
-        if (go) {
-            onGoClick()
-        } else {
-            onBreakClick()
-        }
-    }
-
-    // todo: move to a repo/service
-    private fun onGoClick() {
-        tachometerValuesJob?.cancel()
-        tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            val downDelay = 2500L
-            val upDelay = 2000L
-            val durationUp = 1000L
-            val durationDown = 1200L
-            val firstGearStart = 1
-            val firstGearEnd = 24
-            val gearStart = 1
-            val gearEnd = 18
-            var nextValue = generateNextValues(
-                _tachometerValues,
-                startValue = TACHOMETER_START_VALUE,
-                step = TACHOMETER_STEP,
-                gearStart = firstGearStart,
-                gearEnd = firstGearEnd,
-                animationDuration = durationUp,
-                endDelay = downDelay
-            )
-            nextValue = generateNextValues(
-                _tachometerValues,
-                startValue = nextValue,
-                step = -TACHOMETER_STEP,
-                gearStart = gearStart,
-                gearEnd = gearEnd,
-                animationDuration = durationDown,
-                endDelay = downDelay
-            )
-            nextValue = generateNextValues(
-                _tachometerValues,
-                startValue = nextValue,
-                step = TACHOMETER_STEP,
-                gearStart = gearStart,
-                gearEnd = gearEnd,
-                animationDuration = durationUp,
-                endDelay = upDelay
-            )
-            nextValue = generateNextValues(
-                _tachometerValues,
-                startValue = nextValue,
-                step = -TACHOMETER_STEP,
-                gearStart = gearStart,
-                gearEnd = gearEnd,
-                animationDuration = durationDown,
-                endDelay = downDelay
-            )
-            generateNextValues(
-                _tachometerValues,
-                startValue = nextValue,
-                step = TACHOMETER_STEP,
-                gearStart = gearStart,
-                gearEnd = gearEnd,
-                animationDuration = durationUp + 1000,
-                endDelay = upDelay
-            )
-        }
-
-        speedometerValuesJob?.cancel()
-        speedometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            val gearSwitchDelay = 5000L
-            val duration = 2500L
-            val gearStart = 0
-            val gearEnd = 16
-            var nextValue = generateNextValues(
-                _speedometerValues,
-                startValue = SPEEDOMETER_START_VALUE,
-                step = SPEEDOMETER_STEP,
-                gearStart = gearStart,
-                gearEnd = gearEnd,
-                animationDuration = duration,
-                endDelay = gearSwitchDelay
-            )
-            nextValue = generateNextValues(
-                _speedometerValues,
-                startValue = nextValue,
-                step = SPEEDOMETER_STEP,
-                gearStart = gearStart,
-                gearEnd = gearEnd,
-                animationDuration = duration,
-                endDelay = gearSwitchDelay
-            )
-            generateNextValues(
-                _speedometerValues,
-                startValue = nextValue,
-                step = SPEEDOMETER_STEP,
-                gearStart = gearStart,
-                gearEnd = gearEnd,
-                animationDuration = duration,
-                endDelay = gearSwitchDelay
-            )
-        }
-    }
-
-    private fun onBreakClick() {
-        stopVehicle()
-        tachometerValuesJob?.cancel()
-        tachometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            generateNextValues(
-                _tachometerValues,
-                startValue = TACHOMETER_START_VALUE,
-                step = -SPEEDOMETER_STEP,
-                gearStart = 0,
-                gearEnd = 0,
-                animationDuration = 2000L,
-                endDelay = 0
-            )
-        }
-    }
-
-    private fun stopVehicle() {
-        speedometerValuesJob?.cancel()
-        speedometerValuesJob = viewModelScope.launch(Dispatchers.Default) {
-            generateNextValues(
-                _speedometerValues,
-                startValue = SPEEDOMETER_START_VALUE,
-                step = -SPEEDOMETER_STEP,
-                gearStart = 0,
-                gearEnd = 0,
-                animationDuration = 2000L,
-                endDelay = 0
-            )
-        }
-    }
-
-    private suspend fun generateNextValues(
-        flow: MutableSharedFlow<Pair<Float, Long>>,
-        startValue: Float,
-        step: Float,
-        gearStart: Int,
-        gearEnd: Int,
-        animationDuration: Long,
-        endDelay: Long
-    ): Float =
-        (startValue + (gearEnd - gearStart) * step)
-            .also { nextValue ->
-                flow.emit(nextValue to animationDuration)
-                delay(endDelay)
+        if (!start) {
+            speedometerValuesJob?.cancel()
+            speedometerValuesJob = viewModelScope.launch(Dispatchers.IO) {
+                postNeedleValues(
+                    needleValueGenerator(
+                        MeterType.SPEEDOMETER.name,
+                        engineMode
+                    )
+                )
             }
+        }
+    }
+
+    fun onGoBreakClick(
+        go: Boolean,
+        needleValueGenerator: (
+            meterType: String,
+            engineMode: String
+        ) -> List<NeedleValue>
+    ) {
+        val engineMode = if (go) {
+            EngineMode.GO.name
+        } else {
+            EngineMode.BREAK.name
+        }
+        speedometerValuesJob?.cancel()
+        speedometerValuesJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                postNeedleValues(
+                    needleValueGenerator(
+                        MeterType.SPEEDOMETER.name,
+                        engineMode
+                    )
+                )
+            } catch (t: Throwable) {
+                Log.e(
+                    "NeedleValuesGenerator",
+                    "Interaction with generator service failed",
+                    t
+                ) // fixme: better handling with ui notification
+            }
+        }
+
+        tachometerValuesJob?.cancel()
+        tachometerValuesJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                postNeedleValues(
+                    needleValueGenerator(
+                        MeterType.TACHOMETER.name,
+                        engineMode
+                    )
+                )
+            } catch (t: Throwable) {
+                Log.e(
+                    "NeedleValuesGenerator",
+                    "Interaction with generator service failed",
+                    t
+                ) // fixme: better handling with ui notification
+            }
+        }
+    }
+
+    private suspend fun postNeedleValues(needleValues: List<NeedleValue>) {
+        when (needleValues.random().meterType) {
+            MeterType.SPEEDOMETER -> {
+                postNeedleValueWithDelay(needleValues, _speedometerValues)
+            }
+            MeterType.TACHOMETER -> {
+                postNeedleValueWithDelay(needleValues, _tachometerValues)
+            }
+            else -> throw UnsupportedOperationException()
+        }
+    }
+
+    private suspend fun postNeedleValueWithDelay(
+        needleValues: List<NeedleValue>,
+        flow: MutableSharedFlow<NeedleValue?>
+    ) {
+        for (needleValue in needleValues) {
+            flow.emit(needleValue)
+            delay(needleValue.endDelay)
+        }
+    }
 
     fun buildMeter(
         meterType: MeterType,
@@ -569,13 +488,6 @@ class DashboardViewModel : ViewModel() {
 
         private const val NEEDLE_CIRCLE_RADIUS_COEFFICIENT = 0.2f
         private const val NEEDLE_RADIUS_COEFFICIENT = 0.38f
-
-        private const val SPEEDOMETER_START_VALUE = 0f
-        private const val SPEEDOMETER_STEP = 5f
-
-        private const val TACHOMETER_ZERO = 0f
-        private const val TACHOMETER_START_VALUE = 0.8f
-        private const val TACHOMETER_STEP = 0.2f
 
         private const val BAR_DIGIT_FORMAT = "%.0f"
         private const val BAR_START_ANGLE = -40f
