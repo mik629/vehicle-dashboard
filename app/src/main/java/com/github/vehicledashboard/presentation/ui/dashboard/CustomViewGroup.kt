@@ -42,8 +42,8 @@ class CustomViewGroup @JvmOverloads constructor(
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val tachometerWidth = tachometer?.measuredWidth ?: 0
-        val tachometerHeight = tachometer?.measuredHeight ?: 0
+        val tachometerWidth = getOrDefault(value = tachometer?.measuredWidth, defaultValue = 0)
+        val tachometerHeight = getOrDefault(value = tachometer?.measuredHeight, defaultValue = 0)
         tachometer?.layout(
             0,
             0,
@@ -53,14 +53,17 @@ class CustomViewGroup @JvmOverloads constructor(
         layoutButton(
             meterViewWidth = tachometerWidth,
             meterViewHeight = tachometerHeight,
-            startButton,
-            MeterType.TACHOMETER,
-            meterViewPaddingBottom = tachometer?.paddingBottom ?: 0,
+            button = startButton,
+            meterType = MeterType.TACHOMETER,
+            meterViewPaddingBottom = getOrDefault(
+                value = tachometer?.paddingBottom,
+                defaultValue = 0
+            ),
             r = r
         )
 
-        val speedometerWidth = speedometer?.measuredWidth ?: 0
-        val speedometerHeight = speedometer?.measuredHeight ?: 0
+        val speedometerWidth = getOrDefault(value = speedometer?.measuredWidth, defaultValue = 0)
+        val speedometerHeight = getOrDefault(value = speedometer?.measuredHeight, defaultValue = 0)
         speedometer?.layout(
             0,
             0,
@@ -70,21 +73,24 @@ class CustomViewGroup @JvmOverloads constructor(
         layoutButton(
             meterViewWidth = speedometerWidth,
             meterViewHeight = speedometerHeight,
-            goButton,
-            MeterType.SPEEDOMETER,
-            meterViewPaddingBottom = (speedometer?.paddingBottom ?: 0),
+            button = goButton,
+            meterType = MeterType.SPEEDOMETER,
+            meterViewPaddingBottom = getOrDefault(
+                value = speedometer?.paddingBottom,
+                defaultValue = 0
+            ),
             r = r,
             paddingRight = if (screenOrientation == Configuration.ORIENTATION_PORTRAIT) {
                 0
             } else {
-                (speedometer?.paddingRight ?: 0)
+                getOrDefault(value = speedometer?.paddingRight, defaultValue = 0)
             }
         )
         closeButton?.layout(
-            r - (closeButton?.measuredWidth ?: 0),
+            r - getOrDefault(value = closeButton?.measuredWidth, defaultValue = 0),
             0,
             r,
-            closeButton?.measuredHeight ?: 0
+            getOrDefault(value = closeButton?.measuredHeight, defaultValue = 0)
         )
     }
 
@@ -99,10 +105,11 @@ class CustomViewGroup @JvmOverloads constructor(
     ) {
         val smallestDimension = min(meterViewWidth, meterViewHeight)
         val biggestDimension = max(meterViewWidth, meterViewHeight)
-        val buttonHeight = button?.measuredHeight ?: 0
-        val buttonHalfWidth = getHalf(button?.measuredWidth ?: 0)
+        val buttonHeight = getOrDefault(value = button?.measuredHeight, defaultValue = 0)
+        val buttonHalfWidth = getHalf(getOrDefault(value = button?.measuredWidth, defaultValue = 0))
         val middle = getHalf(smallestDimension)
-        val buttonMarginBottom = (button?.marginBottom ?: 0) + meterViewPaddingBottom
+        val buttonMarginBottom =
+            getOrDefault(value = button?.marginBottom, defaultValue = 0) + meterViewPaddingBottom
         when (meterType) {
             MeterType.SPEEDOMETER -> {
                 val startY = if (screenOrientation == Configuration.ORIENTATION_PORTRAIT) {
@@ -128,4 +135,7 @@ class CustomViewGroup @JvmOverloads constructor(
             else -> throw UnsupportedOperationException()
         }
     }
+
+    private fun getOrDefault(value: Int?, defaultValue: Int): Int =
+        value ?: defaultValue
 }
