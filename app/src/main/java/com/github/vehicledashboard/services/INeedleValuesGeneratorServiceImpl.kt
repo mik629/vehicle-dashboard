@@ -1,6 +1,5 @@
 package com.github.vehicledashboard.services
 
-import android.util.Log
 import com.github.vehicledashboard.INeedleValuesGeneratorService
 import com.github.vehicledashboard.NeedleValue
 import com.github.vehicledashboard.domain.models.EngineMode
@@ -11,60 +10,26 @@ class INeedleValuesGeneratorServiceImpl : INeedleValuesGeneratorService.Stub() {
         meterType: String,
         engineMode: String
     ): List<NeedleValue> {
-        try {
-            return when (EngineMode.valueOf(engineMode)) {
-                EngineMode.START -> {
-                    require(MeterType.valueOf(meterType) == MeterType.TACHOMETER)
-                    listOf(
-                        generateNextValue(
-                            meterType = meterType,
-                            startValue = TACHOMETER_ZERO,
-                            step = TACHOMETER_STEP,
-                            gearStart = 0,
-                            gearEnd = TACHOMETER_START_POSITION,
-                            animationDuration = ANIMATION_DURATION_UP,
-                            endDelay = 0L
-                        )
+        return when (EngineMode.valueOf(engineMode)) {
+            EngineMode.START -> {
+                require(MeterType.valueOf(meterType) == MeterType.TACHOMETER)
+                listOf(
+                    generateNextValue(
+                        meterType = meterType,
+                        startValue = TACHOMETER_ZERO,
+                        step = TACHOMETER_STEP,
+                        gearStart = 0,
+                        gearEnd = TACHOMETER_START_POSITION,
+                        animationDuration = ANIMATION_DURATION_UP,
+                        endDelay = 0L
                     )
-                }
-                EngineMode.STOP -> {
-                    listOf(
-                        when (MeterType.valueOf(meterType)) {
-                            MeterType.SPEEDOMETER ->
-                                generateNextValue(
-                                    meterType = meterType,
-                                    startValue = SPEEDOMETER_START_VALUE,
-                                    step = -SPEEDOMETER_STEP,
-                                    gearStart = 0,
-                                    gearEnd = 0,
-                                    animationDuration = FULL_STOP_DURATION,
-                                    endDelay = 0L
-                                )
-                            MeterType.TACHOMETER ->
-                                generateNextValue(
-                                    meterType = meterType,
-                                    startValue = TACHOMETER_ZERO,
-                                    step = -TACHOMETER_STEP,
-                                    gearStart = 0,
-                                    gearEnd = 0,
-                                    animationDuration = ANIMATION_DURATION_DOWN,
-                                    endDelay = 0L
-                                )
-                            else -> throw UnsupportedOperationException()
-                        }
-                    )
-                }
-                EngineMode.GO -> {
+                )
+            }
+            EngineMode.STOP -> {
+                listOf(
                     when (MeterType.valueOf(meterType)) {
-                        MeterType.SPEEDOMETER -> generateSpeedometerValues(meterType)
-                        MeterType.TACHOMETER -> generateTachometerValues(meterType)
-                        MeterType.UNKNOWN -> throw UnsupportedOperationException()
-                    }
-                }
-                EngineMode.BREAK -> {
-                    listOf(
-                        when (MeterType.valueOf(meterType)) {
-                            MeterType.SPEEDOMETER -> generateNextValue(
+                        MeterType.SPEEDOMETER ->
+                            generateNextValue(
                                 meterType = meterType,
                                 startValue = SPEEDOMETER_START_VALUE,
                                 step = -SPEEDOMETER_STEP,
@@ -73,23 +38,52 @@ class INeedleValuesGeneratorServiceImpl : INeedleValuesGeneratorService.Stub() {
                                 animationDuration = FULL_STOP_DURATION,
                                 endDelay = 0L
                             )
-                            MeterType.TACHOMETER -> generateNextValue(
+                        MeterType.TACHOMETER ->
+                            generateNextValue(
                                 meterType = meterType,
-                                startValue = TACHOMETER_START_VALUE,
+                                startValue = TACHOMETER_ZERO,
                                 step = -TACHOMETER_STEP,
                                 gearStart = 0,
                                 gearEnd = 0,
                                 animationDuration = ANIMATION_DURATION_DOWN,
                                 endDelay = 0L
                             )
-                            MeterType.UNKNOWN -> throw UnsupportedOperationException()
-                        }
-                    )
+                        else -> throw UnsupportedOperationException()
+                    }
+                )
+            }
+            EngineMode.GO -> {
+                when (MeterType.valueOf(meterType)) {
+                    MeterType.SPEEDOMETER -> generateSpeedometerValues(meterType)
+                    MeterType.TACHOMETER -> generateTachometerValues(meterType)
+                    MeterType.UNKNOWN -> throw UnsupportedOperationException()
                 }
             }
-        } catch (t: Throwable) {
-            Log.e("NeedleValues", "Needle values generation for $meterType failed", t)
-            return listOf()
+            EngineMode.BREAK -> {
+                listOf(
+                    when (MeterType.valueOf(meterType)) {
+                        MeterType.SPEEDOMETER -> generateNextValue(
+                            meterType = meterType,
+                            startValue = SPEEDOMETER_START_VALUE,
+                            step = -SPEEDOMETER_STEP,
+                            gearStart = 0,
+                            gearEnd = 0,
+                            animationDuration = FULL_STOP_DURATION,
+                            endDelay = 0L
+                        )
+                        MeterType.TACHOMETER -> generateNextValue(
+                            meterType = meterType,
+                            startValue = TACHOMETER_START_VALUE,
+                            step = -TACHOMETER_STEP,
+                            gearStart = 0,
+                            gearEnd = 0,
+                            animationDuration = ANIMATION_DURATION_DOWN,
+                            endDelay = 0L
+                        )
+                        MeterType.UNKNOWN -> throw UnsupportedOperationException()
+                    }
+                )
+            }
         }
     }
 
