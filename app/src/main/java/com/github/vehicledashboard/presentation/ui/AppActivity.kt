@@ -19,16 +19,17 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.github.vehicledashboard.INeedleValuesGeneratorService
 import com.github.vehicledashboard.R
 import com.github.vehicledashboard.databinding.AppActivityBinding
-import com.github.vehicledashboard.presentation.models.GoBreak
 import com.github.vehicledashboard.presentation.models.engineOppositeState
 import com.github.vehicledashboard.presentation.models.vehicleOppositeState
 import com.github.vehicledashboard.presentation.ui.dashboard.DashboardViewModel
 import com.github.vehicledashboard.services.NeedleValuesGeneratorService
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.system.exitProcess
 
@@ -87,16 +88,31 @@ class AppActivity : AppCompatActivity() {
         switchVisibility(true)
 
         lifecycleScope.launch {
-            dashboardViewModel.isEngineStarted
-                .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
-                .collect { isEngineStarted ->
-                    fillButton(
-                        binding.buttonGoBreak,
-                        GoBreak.GO.stringId,
-                        GoBreak.GO.colorId,
-                        isEngineStarted
-                    )
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    dashboardViewModel.startStopOppositeState
+                        .collectLatest { startStopOppositeState ->
+                            fillButton(
+                                binding.buttonStartStop,
+                                startStopOppositeState.stringId,
+                                startStopOppositeState.colorId
+                            )
+                        }
                 }
+                launch {
+                    dashboardViewModel.isEngineStarted
+                        .combine(dashboardViewModel.goBreakOppositeState) { isEngineStarted, goBreakOppositeState ->
+                            isEngineStarted to goBreakOppositeState
+                        }.collectLatest { engineToGoButtonStatePair ->
+                            fillButton(
+                                binding.buttonGoBreak,
+                                engineToGoButtonStatePair.second.stringId,
+                                engineToGoButtonStatePair.second.colorId,
+                                engineToGoButtonStatePair.first
+                            )
+                        }
+                }
+            }
         }
 
         val needleValueGenerator = { meterType: String,
@@ -110,7 +126,11 @@ class AppActivity : AppCompatActivity() {
         binding.buttonStartStop.setOnClickListener {
             val start = binding.buttonStartStop.text == getString(R.string.start)
             val engineOppositeState = engineOppositeState(start)
-            dashboardViewModel.onEngineStartStopClick(start, needleValueGenerator)
+            dashboardViewModel.onEngineStartStopClick(
+                start,
+                engineOppositeState,
+                needleValueGenerator
+            )
             fillButton(
                 binding.buttonStartStop,
                 engineOppositeState.stringId,
@@ -120,7 +140,7 @@ class AppActivity : AppCompatActivity() {
         binding.buttonGoBreak.setOnClickListener {
             val go = binding.buttonGoBreak.text == getString(R.string.go)
             val vehicleOppositeState = vehicleOppositeState(go)
-            dashboardViewModel.onGoBreakClick(go, needleValueGenerator)
+            dashboardViewModel.onGoBreakClick(go, vehicleOppositeState, needleValueGenerator)
             fillButton(
                 binding.buttonGoBreak,
                 vehicleOppositeState.stringId,

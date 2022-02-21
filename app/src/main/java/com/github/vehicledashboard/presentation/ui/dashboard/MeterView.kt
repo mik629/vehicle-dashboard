@@ -3,14 +3,16 @@ package com.github.vehicledashboard.presentation.ui.dashboard
 import android.animation.TypeEvaluator
 import android.animation.ValueAnimator
 import android.content.Context
-import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.os.Bundle
+import android.os.Parcelable
 import android.util.AttributeSet
 import android.view.View
+import androidx.core.os.bundleOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.findViewTreeLifecycleOwner
@@ -25,6 +27,7 @@ import com.github.vehicledashboard.presentation.models.BarLabel
 import com.github.vehicledashboard.presentation.models.Meter
 import com.github.vehicledashboard.presentation.models.Needle
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -104,8 +107,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
             style = Paint.Style.STROKE
         }
 
-    private var screenOrientation: Int = Configuration.ORIENTATION_PORTRAIT
-
     init {
         val density = resources.displayMetrics.density
         val attributes = context.theme.obtainStyledAttributes(
@@ -175,6 +176,40 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         needlePaint.strokeWidth = NEEDLE_STROKE_WIDTH
     }
 
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val widthMode = MeasureSpec.getMode(widthMeasureSpec)
+        val widthSize = MeasureSpec.getSize(widthMeasureSpec)
+        val heightMode = MeasureSpec.getMode(heightMeasureSpec)
+        val heightSize = MeasureSpec.getSize(heightMeasureSpec)
+        var width: Int
+        var height: Int
+
+        width = if (widthMode == MeasureSpec.EXACTLY || widthMode == MeasureSpec.AT_MOST) {
+            widthSize
+        } else {
+            -1
+        }
+
+        height = if (heightMode == MeasureSpec.EXACTLY || heightMode == MeasureSpec.AT_MOST) {
+            heightSize
+        } else {
+            -1
+        }
+        if (height >= 0 && width >= 0) {
+            width = min(height, width)
+            height = width
+        } else if (width >= 0) {
+            height = width
+        } else if (height >= 0) {
+            width = height
+        } else {
+            width = 0
+            height = 0
+        }
+
+        setMeasuredDimension(width, height)
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         val lifecycleOwner = requireNotNull(findViewTreeLifecycleOwner())
@@ -187,7 +222,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                             chooseFlow(
                                 speedometerFlow = dashboardViewModel.speedometer,
                                 tachometerFlow = dashboardViewModel.tachometer
-                            ).collect { meterData ->
+                            ).collectLatest { meterData ->
                                 meter = meterData
                             }
                         }
@@ -195,7 +230,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                             chooseFlow(
                                 speedometerFlow = dashboardViewModel.speedometerValues,
                                 tachometerFlow = dashboardViewModel.tachometerValues
-                            ).collect { nextValue ->
+                            ).collectLatest { nextValue ->
                                 nextValue?.let { needleValue ->
                                     setNeedleValue(
                                         progress = needleValue.value,
@@ -209,7 +244,7 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
                             chooseFlow(
                                 speedometerFlow = dashboardViewModel.speedometerNeedle,
                                 tachometerFlow = dashboardViewModel.tachometerNeedle
-                            ).collect { aNeedle ->
+                            ).collectLatest { aNeedle ->
                                 needle = aNeedle
                             }
                         }
@@ -245,14 +280,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         }
     }
 
-    override fun onConfigurationChanged(newConfig: Configuration?) {
-        super.onConfigurationChanged(newConfig)
-        newConfig?.let { config ->
-            screenOrientation = config.orientation
-        }
-        meter = null
-    }
-
     override fun onDraw(canvas: Canvas) {
         System.nanoTime()
         backgroundPaint.color = if (isEnabled) {
@@ -264,7 +291,6 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         if (meter == null) {
             dashboardViewModel.buildMeter(
                 meterType = meterType,
-                screenOrientation = screenOrientation,
                 canvasWidth = width,
                 canvasHeight = height,
                 paddingLeft = paddingLeft,
@@ -366,7 +392,27 @@ class MeterView(context: Context, attributeSet: AttributeSet?) : View(context, a
         )
     }
 
+    override fun onSaveInstanceState(): Parcelable {
+        return bundleOf(
+            BUNDLE_KEY_SUPER to super.onSaveInstanceState(),
+            BUNDLE_KEY_METER to meter,
+            BUNDLE_KEY_NEEDLE to lastNeedleValue
+        )
+    }
+
+    override fun onRestoreInstanceState(state: Parcelable?) {
+        val bundle = state as Bundle
+        super.onRestoreInstanceState(bundle.getParcelable(BUNDLE_KEY_SUPER))
+        meter = bundle.getParcelable(BUNDLE_KEY_METER)
+        lastNeedleValue = bundle.getFloat(BUNDLE_KEY_NEEDLE)
+    }
+
     companion object {
+        private const val BUNDLE_KEY_METER = "meter"
+        private const val BUNDLE_KEY_NEEDLE = "needleValue"
+        private const val BUNDLE_KEY_SUPER = "superState"
+
+
         private const val UNSPECIFIED = -1f
         private const val ZERO = 0f
 

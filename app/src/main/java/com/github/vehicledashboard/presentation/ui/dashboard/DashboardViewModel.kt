@@ -1,6 +1,5 @@
 package com.github.vehicledashboard.presentation.ui.dashboard
 
-import android.content.res.Configuration
 import android.graphics.RectF
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -14,8 +13,10 @@ import com.github.vehicledashboard.domain.models.EngineMode
 import com.github.vehicledashboard.domain.models.MeterType
 import com.github.vehicledashboard.domain.sinInRadians
 import com.github.vehicledashboard.presentation.models.BarLabel
+import com.github.vehicledashboard.presentation.models.GoBreak
 import com.github.vehicledashboard.presentation.models.Meter
 import com.github.vehicledashboard.presentation.models.Needle
+import com.github.vehicledashboard.presentation.models.StartStop
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -30,6 +31,14 @@ class DashboardViewModel : ViewModel() {
     private val _isEngineStarted = MutableStateFlow(false)
     val isEngineStarted: StateFlow<Boolean> =
         _isEngineStarted
+
+    private val _startStopOppositeState = MutableStateFlow(StartStop.START)
+    val startStopOppositeState: StateFlow<StartStop> =
+        _startStopOppositeState
+
+    private val _goBreakOppositeState = MutableStateFlow(GoBreak.GO)
+    val goBreakOppositeState: StateFlow<GoBreak> =
+        _goBreakOppositeState
 
     private val _speedometer = MutableStateFlow<Meter?>(null)
     val speedometer: StateFlow<Meter?> =
@@ -63,10 +72,8 @@ class DashboardViewModel : ViewModel() {
 
     fun onEngineStartStopClick(
         start: Boolean,
-        needleValueGenerator: (
-            meterType: String,
-            engineMode: String
-        ) -> List<NeedleValue>
+        engineOppositeState: StartStop,
+        needleValueGenerator: (meterType: String, engineMode: String) -> List<NeedleValue>
     ) {
         val engineMode = if (start) {
             EngineMode.START.name
@@ -76,6 +83,7 @@ class DashboardViewModel : ViewModel() {
         tachometerValuesJob?.cancel()
         tachometerValuesJob = viewModelScope.launch(Dispatchers.IO) {
             _isEngineStarted.emit(start)
+            _startStopOppositeState.value = engineOppositeState
             postNeedleValues(
                 needleValueGenerator(
                     MeterType.TACHOMETER.name,
@@ -86,6 +94,7 @@ class DashboardViewModel : ViewModel() {
         if (!start) {
             speedometerValuesJob?.cancel()
             speedometerValuesJob = viewModelScope.launch(Dispatchers.IO) {
+                _goBreakOppositeState.value = GoBreak.GO
                 postNeedleValues(
                     needleValueGenerator(
                         MeterType.SPEEDOMETER.name,
@@ -98,10 +107,8 @@ class DashboardViewModel : ViewModel() {
 
     fun onGoBreakClick(
         go: Boolean,
-        needleValueGenerator: (
-            meterType: String,
-            engineMode: String
-        ) -> List<NeedleValue>
+        vehicleOppositeState: GoBreak,
+        needleValueGenerator: (meterType: String, engineMode: String) -> List<NeedleValue>
     ) {
         val engineMode = if (go) {
             EngineMode.GO.name
@@ -128,6 +135,7 @@ class DashboardViewModel : ViewModel() {
 
         tachometerValuesJob?.cancel()
         tachometerValuesJob = viewModelScope.launch(Dispatchers.IO) {
+            _goBreakOppositeState.value = vehicleOppositeState
             try {
                 postNeedleValues(
                     needleValueGenerator(
@@ -169,7 +177,6 @@ class DashboardViewModel : ViewModel() {
 
     fun buildMeter(
         meterType: MeterType,
-        screenOrientation: Int,
         canvasWidth: Int,
         canvasHeight: Int,
         paddingLeft: Int,
@@ -188,8 +195,6 @@ class DashboardViewModel : ViewModel() {
                 speedometerJob = viewModelScope.launch(Dispatchers.Default) {
                     _speedometer.emit(
                         doBuildMeter(
-                            meterType = meterType,
-                            screenOrientation = screenOrientation,
                             canvasWidth = canvasWidth,
                             canvasHeight = canvasHeight,
                             paddingLeft = paddingLeft,
@@ -210,8 +215,6 @@ class DashboardViewModel : ViewModel() {
                 tachometerJob = viewModelScope.launch(Dispatchers.Default) {
                     _tachometer.emit(
                         doBuildMeter(
-                            meterType = meterType,
-                            screenOrientation = screenOrientation,
                             canvasWidth = canvasWidth,
                             canvasHeight = canvasHeight,
                             paddingLeft = paddingLeft,
@@ -232,8 +235,6 @@ class DashboardViewModel : ViewModel() {
     }
 
     private fun doBuildMeter(
-        meterType: MeterType,
-        screenOrientation: Int,
         canvasWidth: Int,
         canvasHeight: Int,
         paddingLeft: Int,
@@ -253,9 +254,7 @@ class DashboardViewModel : ViewModel() {
             paddingLeft = paddingLeft,
             paddingRight = paddingRight,
             paddingTop = paddingTop,
-            paddingBottom = paddingBottom,
-            meterType = meterType,
-            screenOrientation = screenOrientation
+            paddingBottom = paddingBottom
         )
         val needleCircleBox = buildBordersBox(
             canvasWidth = canvasWidth,
@@ -264,8 +263,6 @@ class DashboardViewModel : ViewModel() {
             paddingRight = paddingRight,
             paddingTop = paddingTop,
             paddingBottom = paddingBottom,
-            meterType = meterType,
-            screenOrientation = screenOrientation,
             factor = NEEDLE_CIRCLE_RADIUS_COEFFICIENT
         )
         val radius = borderBox.width() * TICKS_RADIUS_COEFFICIENT
@@ -302,8 +299,6 @@ class DashboardViewModel : ViewModel() {
         paddingRight: Int,
         paddingTop: Int,
         paddingBottom: Int,
-        meterType: MeterType,
-        screenOrientation: Int,
         factor: Float = FACTOR_FULL
     ): RectF {
         val smallest =
@@ -311,23 +306,11 @@ class DashboardViewModel : ViewModel() {
                 canvasWidth - paddingLeft - paddingRight,
                 canvasHeight - paddingTop - paddingBottom
             )
-        val startX =
-            if (meterType == MeterType.SPEEDOMETER && screenOrientation != Configuration.ORIENTATION_PORTRAIT) {
-                smallest
-            } else {
-                0
-            }
-        val startY =
-            if (meterType == MeterType.SPEEDOMETER && screenOrientation == Configuration.ORIENTATION_PORTRAIT) {
-                smallest
-            } else {
-                0
-            }
         return RectF(
-            startX + paddingLeft.toFloat(),
-            startY + paddingTop.toFloat(),
-            startX + smallest * factor + paddingRight,
-            startY + smallest * factor + paddingBottom
+            paddingLeft.toFloat(),
+            paddingTop.toFloat(),
+            smallest * factor + paddingRight,
+            smallest * factor + paddingBottom
         )
     }
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.github.vehicledashboard.presentation.ui.dashboard.CustomViewGroup xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -9,12 +9,14 @@
 
     <com.github.vehicledashboard.presentation.ui.dashboard.MeterView
         android:id="@+id/tachometer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:padding="@dimen/margin_standard"
         app:barMajorStep="1"
         app:barMaxValue="8"
         app:barMinorStep="0.2"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:meterType="TACHOMETER" />
 
     <Button
@@ -25,16 +27,21 @@
         android:layout_marginBottom="32dp"
         android:elevation="1dp"
         android:text="@string/start"
-        android:textColor="@color/green_500" />
+        android:textColor="@color/green_500"
+        app:layout_constraintBottom_toBottomOf="@id/tachometer"
+        app:layout_constraintEnd_toEndOf="@id/tachometer"
+        app:layout_constraintStart_toStartOf="@id/tachometer" />
 
     <com.github.vehicledashboard.presentation.ui.dashboard.MeterView
         android:id="@+id/speedometer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:padding="@dimen/margin_standard"
         app:barMajorStep="20"
         app:barMaxValue="280"
         app:barMinorStep="10"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:meterType="SPEEDOMETER" />
 
     <Button
@@ -45,7 +52,10 @@
         android:layout_marginBottom="32dp"
         android:elevation="1dp"
         android:text="@string/go"
-        android:textColor="@color/selector_blue_grey" />
+        android:textColor="@color/selector_blue_grey"
+        app:layout_constraintBottom_toBottomOf="@id/speedometer"
+        app:layout_constraintEnd_toEndOf="@id/speedometer"
+        app:layout_constraintStart_toStartOf="@id/speedometer" />
 
     <ImageButton
         android:id="@+id/button_close"
@@ -54,6 +64,8 @@
         android:backgroundTint="@android:color/transparent"
         android:contentDescription="@string/content_desc_close_btn"
         android:padding="@dimen/margin_standard"
-        android:src="@drawable/ic_close" />
+        android:src="@drawable/ic_close"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-</com.github.vehicledashboard.presentation.ui.dashboard.CustomViewGroup>
+</androidx.constraintlayout.widget.ConstraintLayout>
